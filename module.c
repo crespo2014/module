@@ -11,20 +11,21 @@
  */
 
 /// kernel headers
+#include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
 
-/* Deal with CONFIG_MODVERSIONS */
-#if CONFIG_MODVERSIONS==1
-#define MODVERSIONS
-#include <linux/modversions.h>
-#endif
+///* Deal with CONFIG_MODVERSIONS */
+//#if CONFIG_MODVERSIONS==1
+//#define MODVERSIONS
+//#include <linux/modversions.h>
+//#endif
 
 /**
  * Module initialization routine
  * @return non zero means module fail
  */
-int init_module()
+static int init(void)
 {
   printk("Hello, world - this is the kernel speaking\n");
   return 0;
@@ -34,7 +35,10 @@ int init_module()
  *  Cleanup - undid whatever init_module did
  */
 
-void cleanup_module()
+static void cleanup(void)
 {
   printk("Short is the life of a kernel module\n");
 }
+
+module_init(init);
+module_exit(cleanup);
