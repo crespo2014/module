@@ -137,7 +137,7 @@ int char_dev_init(void)
   }
   printk("%s The major device number is %d.\n", "Registeration is a success.", Major);
   printk("If you want to talk to the device driver,\n");
-  printk("you’ll have to create a device file. \n");
+  printk("you will have to create a device file. \n");
   printk("We suggest you use:\n");
   printk("mknod <name> c %d <minor>\n", Major);
   printk("You can try different minor numbers %s", "and see what happens.\n");
