@@ -114,6 +114,7 @@
 							<tool id="cdt.managedbuild.tool.gnu.c.compiler.base.153115084" name="GCC C Compiler" superClass="cdt.managedbuild.tool.gnu.c.compiler.base">
 								<option id="gnu.c.compiler.option.include.paths.1004164432" name="Include paths (-I)" superClass="gnu.c.compiler.option.include.paths" valueType="includePath">
 									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/linux-3.17/include}&quot;"/>
+									<listOptionValue builtIn="false" value="&quot;${workspace_loc:/linux/include}&quot;"/>
 								</option>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1230111411" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>
 							</tool>
@@ -167,4 +168,5 @@
 			<autodiscovery enabled="true" problemReportingEnabled="true" selectedProfileId=""/>
 		</scannerConfigBuildInfo>
 	</storageModule>
+	<storageModule moduleId="org.eclipse.cdt.internal.ui.text.commentOwnerProjectMappings"/>
 </cproject>
