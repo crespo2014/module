@@ -1,6 +1,12 @@
 #KERNEL_SRC must be define
 
-obj-m := module.o
+#one module multiple objects
+#module-objs := readmap.o
+
+obj-m := module.o 
+
+#multiple modules
+#obj-m := module.o readmap.o
 
 #CC=gcc
 

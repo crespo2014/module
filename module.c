@@ -4,11 +4,12 @@
  *  Created on: 23 Oct 2014
  *      Author: lester
  *
+ * scatter/gather read and write operations
+ *
+ * write and read using list of buffers with size.
  */
 
-/**
- * My hello world module
- */
+
 
 /// kernel headers
 #include <linux/init.h>
