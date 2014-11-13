@@ -38,11 +38,19 @@ struct priv_data
  */
 static int mmap_open(struct inode *inode, struct file *file)
 {
+  //get_page();
+
   return 0;
 }
 
 static int mmap_close(struct inode *inode, struct file *file)
 {
+  return 0;
+}
+
+static int mmap_mmap(struct inode *inode, struct file *file)
+{
+  //virt_to_page();
   return 0;
 }
 
@@ -57,6 +65,9 @@ static ssize_t mmap_read(struct file *file, char *buffer, size_t length, loff_t 
 }
 
 struct file_operations mmap_fops =    //
-    { .read = mmap_read,    //
+    { .mmap = mmap_mmap,
+        .read = mmap_read,    //
         .open = mmap_open,    //
-        .release = mmap_close, };
+        .release = mmap_close,
+    //.poll .flush .sendpage .splice_read
+        };
