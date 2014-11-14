@@ -17,6 +17,9 @@
 #include <linux/uaccess.h>
 #include <linux/proc_fs.h>
 #include <linux/miscdevice.h>
+#include <linux/debugfs.h>
+#include <linux/mm.h>  // mmap related stuff
+#include <linux/slab.h>
 //#include <linux/wrapper.h>
 
 /**
@@ -61,16 +64,58 @@ static int mmap_mmap(struct inode *inode, struct file *file)
 	return 0;
 }
 
+static struct file_operations fops =
+{ };
+static struct miscdevice misc =
+{ };
+
+/**
+ * Function to handler mmap calls from userspace
+ */
+static int fop_mmap(struct file *fd, struct vm_area_struct *vma)
+{
+	struct page *page;
+	struct mmap_info *info;
+	/* is the address valid? */
+//	if (address > vma->vm_end) {
+//		printk("invalid address\n");
+//		return NOPAGE_SIGBUS;
+//	}
+//	/* the data is in vma->vm_private_data */
+//	info = (struct mmap_info *)vma->vm_private_data;
+//	if (!info->data) {
+//		printk("no data\n");
+//		return NULL;
+//	}
+//
+//	/* get the page */
+//	page = virt_to_page(info->data);
+//
+//	/* increment the reference count of this page */
+//	get_page(page);
+//	/* type is the page fault type */
+//	if (type)
+//		*type = VM_FAULT_MINOR;
+
+	return 0;
+}
+
+/**
+ * Function to handler device open
+ */
+int fop_open(struct inode *inode, struct file *filp)
+{
+	struct priv_data *ppd = kmalloc(sizeof(struct priv_data), GFP_KERNEL);
+	filp->private_data = ppd;
+	return 0;
+}
 /**
  * register module on sys/devices/misc automatically  a dev node will be create
  * @return 0 operation success
  */
 static int sys_fs_register(void)
 {
-	static const struct file_operations fops =
-	{ };
-	static struct miscdevice misc =
-	{ };
+	fops.mmap = fop_mmap;
 	misc.name = "mapTest";
 	misc.fops = &fops;
 	return misc_register(&misc);
@@ -81,7 +126,7 @@ static int sys_fs_register(void)
  */
 static void sys_fs_deregister(void)
 {
-
+	misc_deregister(&misc);
 }
 
 /**
@@ -266,6 +311,7 @@ int char_dev_init(void)
  */
 void char_dev_clean(void)
 {
+	sys_fs_deregister();
 	if (Major != 0)
 	{
 		unregister_chrdev(Major, DEVICE_NAME);
@@ -354,5 +400,5 @@ static void cleanup(void)
 	//char_dev_clean();
 }
 
-module_init( init);
-module_exit( cleanup);
+module_init(init);
+module_exit(cleanup);
