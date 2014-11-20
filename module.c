@@ -402,3 +402,34 @@ static void cleanup(void)
 
 module_init(init);
 module_exit(cleanup);
+
+/**
+ * Queue module tips
+ * Operation modes
+ * 1 - driver only send out full 4KB pages.
+ * 2 - Driver send any data each second
+ * send when page is full or one second after last send
+ *
+ * Driver is holding many lists of pages
+ * free_page list.		// we do not need page list because pages are only one by one
+ *   page*
+ *   next*
+ *
+ * user map
+ *   page*	//first page contains wr pointer as header. use offset to send out this page
+ *   next*
+ *   read_pos  //
+ *
+ * pending
+ *   page*
+ *   next*
+ *   begin		// how much send for this page
+ *   end		// use it when page == null otherwise send full page from begin
+ *
+ * user request a map of memory.
+ *   more size that request is return.
+ *   user start fill up the page and update wr_pointer when commit is done.
+ *   if the page is full then un-map.
+ *   start - again
+ *
+ */
