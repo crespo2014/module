@@ -32,8 +32,24 @@
 #include <linux/debugfs.h>
 #include <linux/mm.h>  // mmap related stuff
 #include <linux/slab.h>
+#include <linux/types.h>
 
 // page list structure
+struct page_item
+{
+    void* page;
+    struct page_item* next;
+};
+
+struct queue
+{
+    struct page_item *free_pages;   // availabel pages
+    struct page_item *map_pages;    // pages currently mapped
+    unsigned rd_pos;    // golbal read pos
+    struct page_item *rd_page;         // current readign page
+    unsigned rd_offset;     // offset in current reading page, max == pagesize
+};
+
 
 // map function
 static int mmap(struct file *fd, struct vm_area_struct *vma)
@@ -43,10 +59,33 @@ static int mmap(struct file *fd, struct vm_area_struct *vma)
     return 0;
 }
 
+static int sys_open(struct inode * i, struct file * f)
+{
+    printk("Queue sys fs open");
+    //f->private_data = kmalloc(sizeof(struct queue),)
+    return 0;
+}
+
+static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offset)
+{
+    printk("Queue sys fs read");
+    //f->private_data = kmalloc(sizeof(struct queue),)
+    return 0;
+}
+
+static int sys_close(struct inode * i, struct file * f)
+{
+    printk("Queue sys fs close");
+    //f->private_data = kmalloc(sizeof(struct queue),)
+    return 0;
+}
+
 // file operations for misc device
 static struct file_operations fops_sys = { //
-        .mmap = mmap //
-
+        .open = sys_open, //
+        .read = sys_read, //
+        .mmap = mmap, //
+        .release = sys_close, //
         };
 // misc device resgistration
 static struct miscdevice misc = { //

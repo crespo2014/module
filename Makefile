@@ -19,6 +19,13 @@ obj-m := queue.o
 
 #all : module.o
 
+DIR=$CD
+options :=
+
+ifdef CONFIG
+ options += KCONFIG_CONFIG=${CONFIG}
+endif
+
 v := uname -r
 # build for the current host
 host : module
@@ -26,4 +33,7 @@ host : module
 module:
 
 	echo `uname -r`
-	make -C /usr/src/linux-headers-`uname -r` M=${M}  KCONFIG_CONFIG=/mnt/data/users/lester/projects/linux/i5.config modules
+	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
+	
+clean:
+	rm -f *.ko *.mod.* *.order *.o
