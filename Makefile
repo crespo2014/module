@@ -6,6 +6,8 @@
 #obj-m := module.o 
 obj-m := queue.o 
 
+ccflags-$(DEBUG) += -DDEBUG
+
 #multiple modules
 #obj-m := module.o readmap.o
 
@@ -31,7 +33,6 @@ v := uname -r
 host : module
 
 module:
-
 	echo `uname -r`
 	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
 	

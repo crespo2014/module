@@ -34,6 +34,14 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
+#ifdef DEBUG
+#define printk_debug(...) printk(__VA_ARGS__)
+#else
+#define printk_debug(...) do {} while(0)
+#endif
+
+//
+
 // page list structure
 struct page_item
 {
@@ -50,33 +58,55 @@ struct queue
     unsigned rd_offset;     // offset in current reading page, max == pagesize
 };
 
+inline struct page_item* createPage()
+{
+    struct page_item* p  =  kmalloc(sizeof(struct page_item), GFP_KERNEL);
+    p->page = get_zeroed_page(GFP_KERNEL);
+    p->next = NULL;
+    return p;
+}
+
+inline  deletePage(struct page_item* p)
+{
+    while(p)
+    {
+        struct page_item* n = p->next;
+        free_page(p->page);
+        kfree(p);
+        p = n;
+    }
+}
 
 // map function
 static int mmap(struct file *fd, struct vm_area_struct *vma)
 {
-    struct page *page;
-    struct mmap_info *info;
+    printk_debug("Queue mmap\n");
     return 0;
 }
 
 static int sys_open(struct inode * i, struct file * f)
 {
-    printk("Queue sys fs open");
-    //f->private_data = kmalloc(sizeof(struct queue),)
+    printk_debug("Queue sys fs open\n");
+    struct queue* queue = kmalloc(sizeof(struct queue), GFP_KERNEL);
+    f->private_data = queue;
+    queue->free_pages = createPage();
     return 0;
 }
 
 static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offset)
 {
-    printk("Queue sys fs read");
+    printk_debug("Queue sys fs read\n");
     //f->private_data = kmalloc(sizeof(struct queue),)
     return 0;
 }
 
 static int sys_close(struct inode * i, struct file * f)
 {
-    printk("Queue sys fs close");
-    //f->private_data = kmalloc(sizeof(struct queue),)
+    printk_debug("Queue sys fs close\n");
+    struct queue* queue = (struct queue*)f->private_data;
+    deletePage(queue->free_pages);
+    kfree(queue);
+    f->private_data = NULL;
     return 0;
 }
 
@@ -98,6 +128,7 @@ static unsigned done = 0;  // how far the module has been initialize
 static void cleanup(void)
 {
     int r;
+    //(done > 1) &&
     if (done > 0)
     {
         r = misc_deregister(&misc);
@@ -105,6 +136,8 @@ static void cleanup(void)
         {
             printk("failed to deregister misc device %s - code %d\n", misc.name, r);
         }
+        else
+            printk_debug("deregistered misc device\n");
     }
 }
 
@@ -122,7 +155,9 @@ static int init(void)
         if (r != 0)
         {
             printk("failed to register misc device %s - code %d\n", misc.name, r);
+            break;
         }
+        printk_debug("registered misc device\n");
         done++;
         return 0;
     }
