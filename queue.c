@@ -19,6 +19,14 @@
  *
  * current sending page. the list is holding in kernel. if read = write then pages ahead are free.
  * to find last used page get remaining and walk through all pages until 0
+ *
+ * FIXME
+ * Driver is not capable of send data without interaction from user space
+ * producer will map all memory or just one page.
+ * consumer will send data when 4kb is full or half second pass and there is data
+ * rd wr pointer will be store in page header
+ * driver return number of bytes written
+ *
  */
 
 /// kernel headers
