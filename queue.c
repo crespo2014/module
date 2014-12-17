@@ -89,6 +89,7 @@ inline  deletePage(struct page_item* p)
 static int mmap(struct file *fd, struct vm_area_struct *vma)
 {
     printk_debug("Queue mmap\n");
+    vma->
     return 0;
 }
 
