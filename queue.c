@@ -66,15 +66,15 @@ struct queue
     unsigned rd_offset;     // offset in current reading page, max == pagesize
 };
 
-inline struct page_item* createPage()
+inline struct page_item* createPage(void)
 {
     struct page_item* p  =  kmalloc(sizeof(struct page_item), GFP_KERNEL);
-    p->page = get_zeroed_page(GFP_KERNEL);
+    p->page = (void*)get_zeroed_page(GFP_KERNEL);
     p->next = NULL;
     return p;
 }
 
-inline  deletePage(struct page_item* p)
+inline void deletePage(struct page_item* p)
 {
     while(p)
     {
@@ -89,16 +89,17 @@ inline  deletePage(struct page_item* p)
 static int mmap(struct file *fd, struct vm_area_struct *vma)
 {
     printk_debug("Queue mmap\n");
-    vma->
+    //vma->
     return 0;
 }
 
 static int sys_open(struct inode * i, struct file * f)
 {
+    struct queue* pd;
     printk_debug("Queue sys fs open\n");
-    struct queue* queue = kmalloc(sizeof(struct queue), GFP_KERNEL);
-    f->private_data = queue;
-    queue->free_pages = createPage();
+    pd = kmalloc(sizeof(struct queue), GFP_KERNEL);
+    f->private_data = pd;
+    pd->free_pages = createPage();
     return 0;
 }
 
@@ -111,10 +112,11 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
 
 static int sys_close(struct inode * i, struct file * f)
 {
+    struct queue* pd;
     printk_debug("Queue sys fs close\n");
-    struct queue* queue = (struct queue*)f->private_data;
-    deletePage(queue->free_pages);
-    kfree(queue);
+    pd = (struct queue*)f->private_data;
+    deletePage(pd->free_pages);
+    kfree(pd);
     f->private_data = NULL;
     return 0;
 }
