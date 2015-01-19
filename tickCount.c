@@ -42,6 +42,29 @@ struct file_data
     unsigned long start_time;
 };
 
+static inline unsigned x86_readTick(char* out,unsigned max)
+{
+    uint64_t ticks;
+    asm volatile ( "rdtsc" : "=A"(ticks) );
+    return snprintf(out,max,"%llu \n",ticks);
+    /*
+    unsigned cycles_low, cycles_high;
+
+    asm volatile ("CPUID\n\t"
+    "RDTSC\n\t"
+    : "=d" (cycles_high), "=a" (cycles_low)
+    :
+    :);
+    */
+}
+
+static inline unsigned readJiffies_ms(char* out,unsigned max)
+{
+    long unsigned msec;
+    msec = jiffies*1000/HZ;
+    return snprintf(out,max,"%lu",msec);
+}
+
 static int sys_open(struct inode * i, struct file * f)
 {
     struct file_data* pd = kmalloc(sizeof(*pd), GFP_KERNEL);
@@ -55,7 +78,6 @@ static int sys_open(struct inode * i, struct file * f)
 static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offset)
 {
     unsigned size;
-    unsigned long msec;
     struct file_data* pd = (struct file_data*)f->private_data;
     if ((pd->rd_pos != 0) && (pd->len == 0))
     {
@@ -65,9 +87,8 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
     }
     if (pd->len == 0)
     {
-        //msec = ((long)jiffies - (long)pd->start_time)/(HZ * 1000);
-        msec = jiffies*1000/HZ;
-        pd->len = snprintf(pd->buf,sizeof(pd->buf),"%lu \n",msec);
+        //pd->len = readJiffies_ms(pd->buf,sizeof(pd->buf));
+        pd->len = x86_readTick(pd->buf,sizeof(pd->buf));
         pd->rd_pos = 0;
     }
     size = (len > pd->len) ? pd->len : len;
@@ -142,3 +163,54 @@ static int init(void)
 module_init(init);
 module_exit(cleanup);
 
+/*
+void inline Filltimes(uint64_t **times) {
+unsigned long flags;
+int i, j;
+uint64_t start, end;
+unsigned cycles_low, cycles_high, cycles_low1, cycles_high1;
+volatile int variable = 0;
+
+asm volatile ("CPUID\n\t"
+"RDTSC\n\t"
+"mov %%edx, %0\n\t"
+"mov %%eax, %1\n\t"
+        : "=r" (cycles_high), "=r" (cycles_low)
+        :
+        :"%rax", "%rbx", "%rcx","%rdx");
+asm volatile ("CPUID\n\t"
+"RDTSC\n\t"
+"CPUID\n\t"
+"RDTSC\n\t"
+"mov %%edx, %0\n\t"
+"mov %%eax, %1\n\t": "=r" (cycles_high), "=r" (cycles_low):: "%rax", "%rbx", "%rcx",
+ "%rdx");
+asm volatile ("CPUID\n\t"
+"RDTSC\n\t"::: "%rax", "%rbx", "%rcx", "%rdx");
+
+
+for (j=0; j<BOUND_OF_LOOP; j++) {
+for (i =0; i<SIZE_OF_STAT; i++) {
+
+variable = 0;
+
+preempt_disable();
+raw_local_irq_save(flags);
+
+asm volatile (
+"CPUID\n\t"
+"RDTSC\n\t"
+"mov %%edx, %0\n\t"
+"mov %%eax, %1\n\t": "=r" (cycles_high), "=r" (cycles_low):: "%rax", "%rbx", "%rcx",
+"%rdx");
+
+asm volatile(
+"CPUID\n\t"
+"RDTSC\n\t"
+"mov %%edx, %0\n\t"
+ "mov %%eax, %1\n\t": "=r" (cycles_high1), "=r" (cycles_low1):: "%rax", "%rbx", "%rcx",
+"%rdx");
+
+raw_local_irq_restore(flags);
+preempt_enable();
+*/
