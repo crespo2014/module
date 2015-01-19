@@ -54,6 +54,8 @@ static int sys_open(struct inode * i, struct file * f)
 
 static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offset)
 {
+    unsigned size;
+    unsigned long msec;
     struct file_data* pd = (struct file_data*)f->private_data;
     if ((pd->rd_pos != 0) && (pd->len == 0))
     {
@@ -63,19 +65,19 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
     }
     if (pd->len == 0)
     {
-        unsigned long nsec = ((long)jiffies - (long)pd->start_time)/HZ;
-        pd->len = snprintf(pd->buf,sizeof(pd->buf),"%lu \n",jiffies);
+        //msec = ((long)jiffies - (long)pd->start_time)/(HZ * 1000);
+        msec = jiffies*1000/HZ;
+        pd->len = snprintf(pd->buf,sizeof(pd->buf),"%lu \n",msec);
         pd->rd_pos = 0;
     }
-    unsigned l;
-    l = (len > pd->len) ? pd->len : len;
-    if (copy_to_user(data,pd->buf + pd->rd_pos,l) != 0)
+    size = (len > pd->len) ? pd->len : len;
+    if (copy_to_user(data,pd->buf + pd->rd_pos,size) != 0)
     {
         printk("failed to copy to user \n");
     }
-    pd->rd_pos += l;
-    pd->len -= l;
-    return l;
+    pd->rd_pos += size;
+    pd->len -= size;
+    return size;
 }
 
 static int sys_close(struct inode * i, struct file * f)
