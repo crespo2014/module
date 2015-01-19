@@ -64,7 +64,7 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
     if (pd->len == 0)
     {
         unsigned long nsec = ((long)jiffies - (long)pd->start_time)/HZ;
-        pd->len = snprintf(pd->buf,sizeof(pd->buf),"%lu \n",nsec);
+        pd->len = snprintf(pd->buf,sizeof(pd->buf),"%lu \n",jiffies);
         pd->rd_pos = 0;
     }
     unsigned l;
