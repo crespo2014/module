@@ -108,7 +108,7 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
     }
     if (pd->len == 0)
     {
-        pd->len = snprintf(pd->buf,sizeof(pd->buf), "%llu \n", x86_getTSC());
+        pd->len = snprintf(pd->buf,sizeof(pd->buf), "%llu \n", readJiffies_ms());
         pd->rd_pos = 0;
     }
     size = (len > pd->len) ? pd->len : len;
@@ -143,7 +143,7 @@ static struct miscdevice misc = { //
 
 static unsigned done = 0;  // how far the module has been initialize
 
-static void cleanup(void)
+static void __exit cleanup(void)
 {
     int r;
     if (done > 0)
@@ -161,7 +161,7 @@ static void cleanup(void)
  * Module initialization routine
  * @return non zero means module fail
  */
-static int init(void)
+static int __init init(void)
 {
     int r;      // return code of linux functions
     for (;;)
@@ -183,6 +183,9 @@ static int init(void)
 
 module_init( init);
 module_exit( cleanup);
+
+MODULE_DESCRIPTION("Time stamp counter reader module.");
+MODULE_LICENSE("GPL");
 
 /*
  void inline Filltimes(uint64_t **times) {
