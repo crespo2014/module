@@ -148,11 +148,12 @@ static void __exit cleanup(void)
     int r;
     switch (done)
     {
-    case 1:
-        if (r = misc_deregister(&misc) != 0)
-        {
-            printk("failed to deregister misc device %s - code %d\n", misc.name, r);
-        }
+    case 1: goto done1;
+    }
+done1:
+    if ((r = misc_deregister(&misc)) != 0)
+    {
+        printk("failed to deregister misc device %s - code %d\n", misc.name, r);
     }
     done = 0;
 }
@@ -164,21 +165,22 @@ static void __exit cleanup(void)
 static int __init init(void)
 {
     int r;      // return code of linux functions
-    for (;;)
+    // register device as miscelanious in sys/devices/misc
+    r = misc_register(&misc);
+    if (r != 0)
     {
-        // register device as miscelanious in sys/devices/misc
-        r = misc_register(&misc);
-        if (r != 0)
-        {
-            printk("failed to register misc device %s - code %d\n", misc.name, r);
-            break;
-        }
-        done++;
-        //arm_init_TSC(1,1);
-        return 0;
+        printk("failed to register misc device %s - code %d\n", misc.name, r);
+        goto done0;
     }
+    done++;
+    //arm_init_TSC(1,1);
+    return 0;
+
+//done1:
+    done++;
+done0:
     cleanup();
-    return done;
+    return r;
 }
 
 module_init( init);
