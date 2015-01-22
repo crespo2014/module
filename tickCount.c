@@ -27,6 +27,8 @@
 #include <linux/types.h>
 #include <linux/sched.h>
 
+#include "tsc.h"
+
 #ifdef DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else
@@ -87,6 +89,25 @@ static inline void arm_init_TSC(int do_reset, int enable_divider)
     asm volatile ("MCR p15, 0, %0, c9, c12, 3\t\n" :: "r"(0x8000000f));
 }
 
+static inline void tsc_reset(int reset,int enable_divider)
+{
+    //arm_init_TSC(reset,enable_divider);
+}
+
+static inline uint32_t read_32(void)
+{
+    //return arm_getTSC();
+    return x86_getTSC();
+    // return readJiffies_ms();
+}
+
+static inline uint64_t read_64(void)
+{
+    //return arm_getTSC();
+     return x86_getTSC();
+    // return readJiffies_ms();
+}
+
 static int sys_open(struct inode * i, struct file * f)
 {
     struct file_data* pd = kmalloc(sizeof(*pd), GFP_KERNEL);
@@ -129,10 +150,34 @@ static int sys_close(struct inode * i, struct file * f)
     return 0;
 }
 
+int device_ioctl(struct file *file, /* ditto */
+         unsigned int ioctl_num,    /* number and param for ioctl */
+         unsigned long ioctl_param)
+{
+    uint8_t ch;
+    /*
+     * Switch according to the ioctl called
+     */
+    switch (ioctl_num) {
+    case IOCTL_RESET:
+        get_user(ch,(unsigned char*)ioctl_param);
+        tsc_reset(1,ch);
+        break;
+    case IOCTL_READ_32:
+        put_user(read_32(),(uint32_t*)ioctl_param);
+        break;
+    case IOCTL_READ_64:
+        put_user(read_64(),(uint64_t*)ioctl_param);
+        break;
+    }
+    return 0;
+}
+
 // file operations for misc device
 static struct file_operations fops_sys = { //
         .open = sys_open, //
         .read = sys_read, //
+        .unlocked_ioctl = device_ioctl,
         .release = sys_close, //
         };
 // misc device resgistration
