@@ -137,7 +137,7 @@ static struct file_operations fops_sys = { //
         };
 // misc device resgistration
 static struct miscdevice misc = { //
-        .name = "tickCount", //
+        .name = "tsc", //
         .fops = &fops_sys, //
         };
 
@@ -146,10 +146,10 @@ static unsigned done = 0;  // how far the module has been initialize
 static void __exit cleanup(void)
 {
     int r;
-    if (done > 0)
+    switch (done)
     {
-        r = misc_deregister(&misc);
-        if (r != 0)
+    case 1:
+        if (r = misc_deregister(&misc) != 0)
         {
             printk("failed to deregister misc device %s - code %d\n", misc.name, r);
         }
