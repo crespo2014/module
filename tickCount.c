@@ -129,7 +129,7 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
     }
     if (pd->len == 0)
     {
-        pd->len = snprintf(pd->buf,sizeof(pd->buf), "%llu \n", readJiffies_ms());
+        pd->len = snprintf(pd->buf,sizeof(pd->buf), "%llu \n", read_64());
         pd->rd_pos = 0;
     }
     size = (len > pd->len) ? pd->len : len;
