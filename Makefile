@@ -22,7 +22,7 @@ ccflags-$(DEBUG) += -DDEBUG
 #all : module.o
 
 DIR=$CD
-options :=
+options := CONFIG_DEBUG_SECTION_MISMATCH=y
 
 ifdef CONFIG
  options += KCONFIG_CONFIG=${CONFIG}
@@ -36,5 +36,7 @@ module:
 	echo `uname -r`
 	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
 	
+test: test.cpp ../cpp-lib/posix/File.cpp
+	g++ -o test --std=c++11 $^
 clean:
 	rm -f *.ko *.mod.* *.order *.o

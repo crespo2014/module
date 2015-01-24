@@ -150,7 +150,7 @@ static int sys_close(struct inode * i, struct file * f)
     return 0;
 }
 
-int device_ioctl(struct file *file, /* ditto */
+long device_ioctl(struct file *file, /* ditto */
          unsigned int ioctl_num,    /* number and param for ioctl */
          unsigned long ioctl_param)
 {
@@ -186,21 +186,29 @@ static struct miscdevice misc = { //
         .fops = &fops_sys, //
         };
 
-static unsigned done = 0;  // how far the module has been initialize
+
+
+enum init_level { none,misc_reg,all};
+
+static void clean(enum init_level lvl)
+{
+    int r;
+    switch (lvl)
+    {
+    case all:
+    case misc_reg:
+        if ((r = misc_deregister(&misc)) != 0)
+        {
+            printk("failed to deregister misc device %s - code %d\n", misc.name, r);
+        }
+    default:
+        return;
+    }
+}
 
 static void __exit cleanup(void)
 {
-    int r;
-    switch (done)
-    {
-    case 1: goto done1;
-    }
-done1:
-    if ((r = misc_deregister(&misc)) != 0)
-    {
-        printk("failed to deregister misc device %s - code %d\n", misc.name, r);
-    }
-    done = 0;
+    clean(all);
 }
 
 /**
@@ -209,22 +217,21 @@ done1:
  */
 static int __init init(void)
 {
+    enum init_level done = none;  // how far the module has been initialize
     int r;      // return code of linux functions
     // register device as miscelanious in sys/devices/misc
     r = misc_register(&misc);
     if (r != 0)
     {
         printk("failed to register misc device %s - code %d\n", misc.name, r);
-        goto done0;
+        goto clean_all;
     }
-    done++;
+    done = misc_reg;
     //arm_init_TSC(1,1);
     return 0;
 
-//done1:
-    done++;
-done0:
-    cleanup();
+clean_all:
+    clean(done);
     return r;
 }
 
