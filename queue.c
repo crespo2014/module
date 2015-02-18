@@ -27,6 +27,24 @@
  * rd wr pointer will be store in page header
  * driver return number of bytes written
  *
+ * User define minimum size of block and how many blocks
+ * each block has a header that includes
+ * status
+ * write position
+ * User application is going to jump from one block to another ina cicular way. is the block is not free by kernel then it must wait
+ * or allocated more with remap.
+ *
+ * driver has a table
+ * page list.
+ * block data. read pointer first page
+ *
+ * Producer maybe can go to first page if it is free to use.
+ * I mean the pages is gone.
+ * driver has to check all pages not only the next one
+ *
+ * how to wit for new data.
+ * wr_pos or status is update. check every half second.
+ * received a notification everytime a block is wrote through send function
  */
 
 /// kernel headers
@@ -42,47 +60,68 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 
+#include "queue_mod.h"
+
 #ifdef DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else
 #define printk_debug(...) do {} while(0)
 #endif
 
-//
-
-// page list structure
-struct page_item
+enum blck_stat_e
 {
-    void* page;
-    struct page_item* next;
+    blck_free = 0,
+    blck_writting,
+    blck_wrote,
 };
 
-struct queue
+/// each block has a header
+struct block_hdr_t
 {
-    struct page_item *free_pages;   // availabel pages
-    struct page_item *map_pages;    // pages currently mapped
-    unsigned rd_pos;    // golbal read pos
-    struct page_item *rd_page;         // current readign page
-    unsigned rd_offset;     // offset in current reading page, max == pagesize
+    u8 status;      ///< block status
+    u32 wr_pos_;
+    void* align;    /// offset of this is start position
 };
 
-inline struct page_item* createPage(void)
+/*
+ * Section information use by the module
+ * point to page currently in use
+ * page_idx is rd_pos / pagesize. the only thing is that rd_pos does not start at zero at the first
+ * page_pos is rd % pagesize;
+ */
+struct file_data_t
 {
-    struct page_item* p  =  kmalloc(sizeof(struct page_item), GFP_KERNEL);
-    p->page = (void*)get_zeroed_page(GFP_KERNEL);
-    p->next = NULL;
-    return p;
+    u8 page_count;   /// how many page are allocate
+    u8 page_step;  /// how many pages per block, increment block pos using this step
+    u8 current_page;   /// current reading block
+    u32 rd_pos;         /// current reading pos from current page
+    unsigned long *page_ptr;  // it will be more than one, create more pages is possible if this pointer is update
+};
+
+
+int allocate_pages(struct file_data_t* map)
+{
+    unsigned count = map->page_count * map->page_step;
+    map->page_ptr = kmalloc(count*sizeof(void*), GFP_KERNEL);
+    memset(map->page_ptr,0,count*sizeof(void*));
+    while (count--)
+    {
+        if ((map->page_ptr[count] = get_zeroed_page(GFP_KERNEL)) == NULL)
+            return 1;
+    }
+    return 0;
 }
 
-inline void deletePage(struct page_item* p)
+void deallocate_pages(struct file_data_t* map)
 {
-    while(p)
+    unsigned count = map->page_count * map->page_step;
+    while (count--)
     {
-        struct page_item* n = p->next;
-        free_page(p->page);
-        kfree(p);
-        p = n;
+        if (map->page_ptr[count] != NULL)
+            free_page(map->page_ptr[count]);
     }
+    kfree(map->page_ptr);
+    //map->page_ptr = NULL;
 }
 
 // map function
@@ -95,11 +134,10 @@ static int mmap(struct file *fd, struct vm_area_struct *vma)
 
 static int sys_open(struct inode * i, struct file * f)
 {
-    struct queue* pd;
+    struct file_data_t* pd;
     printk_debug("Queue sys fs open\n");
-    pd = kmalloc(sizeof(struct queue), GFP_KERNEL);
-    f->private_data = pd;
-    pd->free_pages = createPage();
+    pd = kmalloc(sizeof(struct file_data_t), GFP_KERNEL);
+    memset(pd,0,sizeof(*pd));
     return 0;
 }
 
@@ -112,12 +150,36 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
 
 static int sys_close(struct inode * i, struct file * f)
 {
-    struct queue* pd;
+    struct file_data_t* pd;
     printk_debug("Queue sys fs close\n");
-    pd = (struct queue*)f->private_data;
-    deletePage(pd->free_pages);
+    pd = (struct file_data_t*)f->private_data;
+    deallocate_pages(pd);
     kfree(pd);
     f->private_data = NULL;
+    return 0;
+}
+
+long device_ioctl(struct file *file, /* ditto */
+         unsigned int ioctl_num,    /* number and param for ioctl */
+         unsigned long ioctl_param)
+{
+
+    struct queue_info_ q;
+    /*
+     * Switch according to the ioctl called
+     */
+    switch (ioctl_num) {
+    case QUEUE_INIT:
+        get_user(ch,(unsigned char*)ioctl_param);
+        tsc_reset(1,ch);
+        break;
+    case IOCTL_READ_32:
+        put_user(read_32(),(uint32_t*)ioctl_param);
+        break;
+    case IOCTL_READ_64:
+        put_user(read_64(),(uint64_t*)ioctl_param);
+        break;
+    }
     return 0;
 }
 
@@ -126,6 +188,7 @@ static struct file_operations fops_sys = { //
         .open = sys_open, //
         .read = sys_read, //
         .mmap = mmap, //
+        .unlocked_ioctl = device_ioctl, //
         .release = sys_close, //
         };
 // misc device resgistration
