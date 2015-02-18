@@ -163,23 +163,24 @@ long device_ioctl(struct file *file, /* ditto */
          unsigned int ioctl_num,    /* number and param for ioctl */
          unsigned long ioctl_param)
 {
-
+    struct file_data_t* pd = (struct file_data_t*)file->private_data;
     struct queue_info_ q;
     /*
      * Switch according to the ioctl called
      */
     switch (ioctl_num) {
     case QUEUE_INIT:
-        get_user(ch,(unsigned char*)ioctl_param);
-        tsc_reset(1,ch);
-        break;
-    case IOCTL_READ_32:
-        put_user(read_32(),(uint32_t*)ioctl_param);
-        break;
-    case IOCTL_READ_64:
-        put_user(read_64(),(uint64_t*)ioctl_param);
+        get_user(q,(struct queue_info_*)ioctl_param);
+        if (q.block_size % page_size)
+                q.block_size += (page_size - q.block_size % page_size);// ((q.block_size+page_size() - 1) / page_size;
+        put_user(&q,(struct queue_info_*)ioctl_param);
+        pd->page_step = q.block_size / page_size;
+        pd->page_count = pd->page_step * q.block_count;
+        pd->current_page = 0;
+        pd->rd_pos = 6;     //FIXME
         break;
     }
+
     return 0;
 }
 
