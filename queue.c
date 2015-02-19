@@ -184,6 +184,33 @@ long device_ioctl(struct file *file, /* ditto */
     return 0;
 }
 
+/*
+ * Write operation still supported.
+ * If null pointer is received this operation is treated as a flush called every a block is full
+ */
+static int device_write(struct file *f, char __user *data, size_t len, loff_t *offset)
+{
+    if (data)
+    {
+        // fill current written block and append data must be space for all or nothing
+    }
+    else
+    {
+        // do a flush and notify to read side to keep reading
+    }
+    return 0;
+}
+
+
+/*
+ * To be implemented read operation
+ * also support for splice is needed as well
+ */
+static int device_read(struct file *f, char __user *data, size_t len, loff_t *offset)
+{
+    return 0;
+}
+
 // file operations for misc device
 static struct file_operations fops_sys = { //
         .open = sys_open, //
