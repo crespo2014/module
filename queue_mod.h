@@ -17,6 +17,13 @@ struct queue_info_
     u32 block_count; /// user set how many block to allocate
 };
 
+/// each block has a header
+struct block_hdr_t
+{
+    u8 status;      ///< block status
+    u32 wr_pos_;
+    void* align;    /// offset of this is start position
+};
 
 
 #endif /* QUEUE_MOD_H_ */
