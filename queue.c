@@ -99,7 +99,7 @@ int allocate_pages(struct queue_t* map)
     memset(map->page_ptr,0,count*sizeof(void*));
     while (count--)
     {
-        if ((map->page_ptr[count] = get_zeroed_page(GFP_KERNEL)) == NULL)
+        if ((map->page_ptr[count] = get_zeroed_page(GFP_KERNEL)) == 0)
             return 1;
     }
     return 0;
@@ -110,7 +110,7 @@ void deallocate_pages(struct queue_t* map)
     unsigned count = map->page_count * map->page_step;
     while (count--)
     {
-        if (map->page_ptr[count] != NULL)
+        if (map->page_ptr[count] != 0)
             free_page(map->page_ptr[count]);
     }
     kfree(map->page_ptr);
@@ -120,12 +120,21 @@ void deallocate_pages(struct queue_t* map)
 // map function
 static int device_mmap(struct file *fd, struct vm_area_struct *vma)
 {
-    struct queue_t* pd = (struct queue_t*)file->private_data;
+    struct queue_t* pd = (struct queue_t*)fd->private_data;
+    // trace all information
+    printk_debug("mmap request from 0x%X to 0x%X\n",vma->vm_start,vma->vm_end);
+
     if (pd->page_count == 0)
     {
         printk_debug("Missing Queue init call");
         return 2;
     }
+    if (pd->page_ptr != NULL)
+    {
+        printk_debug("Queue already map");
+        return 2;
+    }
+    allocate_pages(pd);
     printk_debug("Queue device_mmap\n");
     return 0;
 }
@@ -135,13 +144,6 @@ static int device_open(struct inode * i, struct file * f)
     struct queue_t* pd;
     pd = kmalloc(sizeof(struct queue_t), GFP_KERNEL);
     memset(pd,0,sizeof(*pd));
-    return 0;
-}
-
-static int device_read(struct file *f, char __user *data, size_t len, loff_t *offset)
-{
-    printk_debug("Queue sys fs read\n");
-    //f->private_data = kmalloc(sizeof(struct queue),)
     return 0;
 }
 
@@ -172,11 +174,17 @@ long device_ioctl(struct file *file, /* ditto */
             printk_debug("Queue init called twices");
             return 2;
         }
-        get_user(q,(struct queue_info_*)ioctl_param);
-        if (q.block_size % page_size)
-                q.block_size += (page_size - q.block_size % page_size);// ((q.block_size+page_size() - 1) / page_size;
-        put_user(&q,(struct queue_info_*)ioctl_param);
-        pd->page_step = q.block_size / page_size;
+        if (copy_from_user(&q,(void*)ioctl_param,sizeof(struct queue_info_)) !=0 )
+        {
+            return 4;
+        }
+        if (q.block_size % PAGE_SIZE)
+                q.block_size += (PAGE_SIZE - q.block_size % PAGE_SIZE);// ((q.block_size+page_size() - 1) / page_size;
+        if (copy_to_user((void*)ioctl_param,&q,sizeof(struct queue_info_)) != 0)
+        {
+            return 4;
+        }
+        pd->page_step = q.block_size / PAGE_SIZE;
         pd->page_count = pd->page_step * q.block_count;
         pd->current_page = 0;
         pd->rd_pos = 6;     //FIXME
@@ -190,9 +198,9 @@ long device_ioctl(struct file *file, /* ditto */
  * Write operation still supported.
  * If null pointer is received this operation is treated as a flush called every a block is full
  */
-static int device_write(struct file *f, char __user *data, size_t len, loff_t *offset)
+static int device_write(struct file *fd,const char __user *data, size_t len, loff_t *offset)
 {
-    struct queue_t* pd = (struct queue_t*)file->private_data;
+    struct queue_t* pd = (struct queue_t*)fd->private_data;
     if (data != NULL)
     {
         // fill current written block and append data must be space for all or nothing
@@ -202,7 +210,7 @@ static int device_write(struct file *f, char __user *data, size_t len, loff_t *o
         // do a flush and notify to read side to keep reading
         //pd->
     }
-    return 0;
+    return pd->rd_pos;
 }
 
 
@@ -210,15 +218,19 @@ static int device_write(struct file *f, char __user *data, size_t len, loff_t *o
  * To be implemented read operation
  * also support for splice is needed as well
  */
-static int device_read(struct file *f, char __user *data, size_t len, loff_t *offset)
+static int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
 {
-    return 0;
+    struct queue_t* pd = (struct queue_t*)fd->private_data;
+    printk_debug("Queue read\n");
+
+    return pd->rd_pos;
 }
 
 // file operations for misc device
 static struct file_operations fops_sys = { //
         .open = device_open, //
         .read = device_read, //
+        .write = device_write, //
         .mmap = device_mmap, //
         .unlocked_ioctl = device_ioctl, //
         .release = device_close, //
