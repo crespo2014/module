@@ -1,0 +1,8 @@
+NAME="queue" , MODE="0666"
+
+#E: DEVNAME=/dev/queue
+#E: DEVPATH=/devices/virtual/misc/queue
+#E: MAJOR=10
+#E: MINOR=0
+#E: SUBSYSTEM=misc
+#E: UDEV_LOG=3

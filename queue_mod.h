@@ -10,6 +10,11 @@
 
 #define QUEUE_INIT  1
 
+#ifndef u8
+#define u8 uint8_t
+#define u32 uint32_t
+#endif
+
 // user configuration send from ioctl
 struct queue_info_
 {

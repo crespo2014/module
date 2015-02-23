@@ -47,6 +47,9 @@
  * received a notification everytime a block is wrote through send function
  */
 
+//TODO allocated pages per order, then block_count*block_size must agree order 1 2 4 8 16
+// then split in 2, 4 or 8 -
+
 /// kernel headers
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -101,6 +104,7 @@ int allocate_pages(struct queue_t* map)
     {
         if ((map->page_ptr[count] = get_zeroed_page(GFP_KERNEL)) == 0)
             return 1;
+        strcpy((char*)map->page_ptr[count],"kernel mem");
     }
     return 0;
 }
@@ -121,37 +125,45 @@ void deallocate_pages(struct queue_t* map)
 static int device_mmap(struct file *fd, struct vm_area_struct *vma)
 {
     struct queue_t* pd = (struct queue_t*)fd->private_data;
+    unsigned long nPages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+    int i;
+
     // trace all information
     printk_debug("mmap request from 0x%X to 0x%X\n",vma->vm_start,vma->vm_end);
 
-    if (pd->page_count == 0)
+    if ((pd->page_count == 0) || (pd->page_ptr != NULL) || (nPages != pd->page_count))
     {
-        printk_debug("Missing Queue init call");
-        return 2;
+        printk_debug("Not a valid status to map");
+        return -EINVAL;
     }
-    if (pd->page_ptr != NULL)
-    {
-        printk_debug("Queue already map");
-        return 2;
-    }
+
     allocate_pages(pd);
-    printk_debug("Queue device_mmap\n");
+    for (i=0;i<pd->page_count;++i)
+    {
+        if (remap_pfn_range(vma,vma->vm_start+i*PAGE_SIZE,pd->page_ptr[i]>>PAGE_SHIFT,PAGE_SIZE,vma->vm_page_prot))
+        {
+            printk_debug("Queue map failed");
+            return -EINVAL;
+        }
+    }
     return 0;
 }
 
 static int device_open(struct inode * i, struct file * f)
 {
-    struct queue_t* pd;
-    pd = kmalloc(sizeof(struct queue_t), GFP_KERNEL);
+    struct queue_t* pd = kmalloc(sizeof(struct queue_t), GFP_KERNEL);
+    printk_debug("Queue sys fs open\n");
+    if (pd == NULL)
+        return -EINVAL;
     memset(pd,0,sizeof(*pd));
+    f->private_data = pd;
     return 0;
 }
 
 static int device_close(struct inode * i, struct file * f)
 {
-    struct queue_t* pd;
+    struct queue_t* pd  = (struct queue_t*)f->private_data;
     printk_debug("Queue sys fs close\n");
-    pd = (struct queue_t*)f->private_data;
     deallocate_pages(pd);
     kfree(pd);
     f->private_data = NULL;

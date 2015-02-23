@@ -7,9 +7,17 @@
 
 #include "../cpp-lib/posix/File.h"
 #include "tsc.h"
+#include "queue_mod.h"
+#include "linux/types.h"
 
 int main()
 {
+    POSIX::File f("/dev/queue", O_RDONLY);
+    queue_info_ nfo;
+    nfo.block_size = 1024;
+    nfo.block_count = 4;
+    f.ioctl(QUEUE_INIT,&nfo);
+    /*
     uint32_t u32;
     uint64_t u64,eu64;
     char divider =1;
@@ -25,5 +33,6 @@ int main()
     f.ioctl(IOCTL_READ_64,&eu64);
     std::cout << std::endl << eu64 <<std::endl;
     std::cout << eu64 -u64 << std::endl;
+    */
     return 0;
 }

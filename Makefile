@@ -37,7 +37,7 @@ module:
 	echo `uname -r`
 	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
 	
-test: test.cpp ../cpp-lib/posix/File.cpp
-	g++ -o test --std=c++11 $^
+test: main.cpp ../cpp-lib/posix/File.cpp
+	g++ -g -o test --std=c++11 $^
 clean:
 	rm -f *.ko *.mod.* *.order *.o
