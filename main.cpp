@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 #include <iostream>
+#include <sys/mman.h>
 
 #include "../cpp-lib/posix/File.h"
 #include "tsc.h"
@@ -17,6 +18,8 @@ int main()
     nfo.block_size = 1024;
     nfo.block_count = 4;
     f.ioctl(QUEUE_INIT,&nfo);
+    void* p = f.mmap(nullptr,nfo.block_count*nfo.block_size,0);
+    ::munmap(p,nfo.block_count*nfo.block_size);
     /*
     uint32_t u32;
     uint64_t u64,eu64;

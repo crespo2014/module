@@ -111,14 +111,17 @@ int allocate_pages(struct queue_t* map)
 
 void deallocate_pages(struct queue_t* map)
 {
-    unsigned count = map->page_count * map->page_step;
-    while (count--)
+    if (map->page_ptr != NULL)
     {
-        if (map->page_ptr[count] != 0)
-            free_page(map->page_ptr[count]);
+        unsigned count = map->page_count * map->page_step;
+        while (count--)
+        {
+            if (map->page_ptr[count] != 0)
+                free_page(map->page_ptr[count]);
+        }
     }
     kfree(map->page_ptr);
-    //map->page_ptr = NULL;
+    map->page_ptr = NULL;
 }
 
 // map function
@@ -129,7 +132,7 @@ static int device_mmap(struct file *fd, struct vm_area_struct *vma)
     int i;
 
     // trace all information
-    printk_debug("mmap request from 0x%X to 0x%X\n",vma->vm_start,vma->vm_end);
+    printk_debug("mmap request from 0x%lX to 0x%lX\n",vma->vm_start,vma->vm_end);
 
     if ((pd->page_count == 0) || (pd->page_ptr != NULL) || (nPages != pd->page_count))
     {
@@ -142,7 +145,7 @@ static int device_mmap(struct file *fd, struct vm_area_struct *vma)
     {
         if (remap_pfn_range(vma,vma->vm_start+i*PAGE_SIZE,pd->page_ptr[i]>>PAGE_SHIFT,PAGE_SIZE,vma->vm_page_prot))
         {
-            printk_debug("Queue map failed");
+            printk_debug("Queue map failed\n");
             return -EINVAL;
         }
     }
