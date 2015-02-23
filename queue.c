@@ -103,7 +103,9 @@ int allocate_pages(struct queue_t* map)
     while (count--)
     {
         if ((map->page_ptr[count] = get_zeroed_page(GFP_KERNEL)) == 0)
+        {
             return 1;
+        }
         strcpy((char*)map->page_ptr[count],"kernel mem");
     }
     return 0;
@@ -140,7 +142,11 @@ static int device_mmap(struct file *fd, struct vm_area_struct *vma)
         return -EINVAL;
     }
 
-    allocate_pages(pd);
+    if (allocate_pages(pd) != 0)
+    {
+        printk_debug("allocate_pages failed\n");
+        return -EINVAL;
+    }
     for (i=0;i<pd->page_count;++i)
     {
         if (remap_pfn_range(vma,vma->vm_start+i*PAGE_SIZE,pd->page_ptr[i]>>PAGE_SHIFT,PAGE_SIZE,vma->vm_page_prot))
