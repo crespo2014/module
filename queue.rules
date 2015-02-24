@@ -1,8 +1,4 @@
-NAME="queue" , MODE="0666"
+KERNEL=="queue" ,SUBSYSTEM=="misc" , MODE="0666"
 
-#E: DEVNAME=/dev/queue
-#E: DEVPATH=/devices/virtual/misc/queue
-#E: MAJOR=10
-#E: MINOR=0
-#E: SUBSYSTEM=misc
-#E: UDEV_LOG=3
+# udevadm info -a -p /sys/class/misc/queue
+# udevadm control --reload-rules
