@@ -8,7 +8,11 @@
 #ifndef QUEUE_MOD_H_
 #define QUEUE_MOD_H_
 
-#define QUEUE_INIT  1
+#define DEVICE_NAME "KernelQueue"
+#define DEVICE_PATH "/dev/queue"
+#define MAGIC_NO 10
+
+#define QUEUE_INIT     _IOWR(MAGIC_NO, 0)
 
 #ifndef u8
 #define u8 uint8_t
