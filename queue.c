@@ -71,13 +71,6 @@
 #define printk_debug(...) do {} while(0)
 #endif
 
-enum blck_stat_e
-{
-    blck_free = 0,
-    blck_writting,
-    blck_wrote,
-};
-
 /*
  * Section information use by the module
  * point to page currently in use
@@ -86,44 +79,61 @@ enum blck_stat_e
  */
 struct queue_t
 {
-    u8 page_count;   /// how many page are allocate
-    u8 page_step;  /// how many pages per block, increment block pos using this step
+    u8 page_count;     /// how many page are allocate
+    u8 page_step;      /// how many pages per block, increment block pos using this step
     u8 current_page;   /// current reading block
-    u32 rd_pos;         /// current reading pos from current page
-    unsigned long *page_ptr;  // it will be more than one, create more pages is possible if this pointer is update
+    u32 rd_pos;        /// current reading pos from current page
+    void** pages;    /// continue memory allocated pages
     wait_queue_head_t rd_queue,wr_queue;       /* read and write wait queues for blocking operations */
 };
 
-
-int allocate_pages(struct queue_t* map)
+/**
+ * Initalize all block headers
+ */
+void init_block_headers(struct queue_t* pthis)
 {
-    unsigned count = map->page_count * map->page_step;
-    map->page_ptr = kmalloc(count*sizeof(void*), GFP_KERNEL);
-    memset(map->page_ptr,0,count*sizeof(void*));
+    unsigned idx = 0;
+    struct block_hdr_t* pheader;
+    while (idx < pthis->page_count)
+    {
+        pheader = (struct block_hdr_t*)pthis->pages[idx];
+        pheader->status = blck_free;
+        idx += pthis->page_step;
+    }
+}
+
+int allocate_pages(struct queue_t* pthis)
+{
+    unsigned count = pthis->page_count;
+    pthis->pages = kmalloc(count*sizeof(void*), GFP_KERNEL);
+
+    printk_debug("allocate_pages\n");
+    memset(pthis->pages,0,count*sizeof(void*));
     while (count--)
     {
-        if ((map->page_ptr[count] = get_zeroed_page(GFP_KERNEL)) == 0)
+        if ((pthis->pages[count] = (void*)get_zeroed_page(GFP_KERNEL)) == 0)
         {
-            return 1;
+            printk_debug("Failed to allocate page at %d",count);
+            return -EINVAL;
         }
-        strcpy((char*)map->page_ptr[count],"kernel mem");
     }
     return 0;
 }
 
-void deallocate_pages(struct queue_t* map)
+void deallocate_pages(struct queue_t* pthis)
 {
-    if (map->page_ptr != NULL)
+    printk_debug("deallocate_pages\n");
+    if (pthis->pages != NULL)
     {
-        unsigned count = map->page_count * map->page_step;
+        unsigned count = pthis->page_count;
         while (count--)
         {
-            if (map->page_ptr[count] != 0)
-                free_page(map->page_ptr[count]);
+            if (pthis->pages[count] != 0)
+                free_page((unsigned long)pthis->pages[count]);
         }
     }
-    kfree(map->page_ptr);
-    map->page_ptr = NULL;
+    kfree(pthis->pages);
+    pthis->pages = NULL;
 }
 
 // map function
@@ -136,22 +146,22 @@ static int device_mmap(struct file *fd, struct vm_area_struct *vma)
     // trace all information
     printk_debug("mmap request from 0x%lX to 0x%lX\n",vma->vm_start,vma->vm_end);
 
-    if ((pd->page_count == 0) || (pd->page_ptr != NULL) || (nPages != pd->page_count))
+    if ((pd->page_count == 0) || (pd->pages != NULL) || (nPages != pd->page_count))
     {
         printk_debug("Not a valid status to map");
         return -EINVAL;
     }
-
-    if (allocate_pages(pd) != 0)
+    if ((i = allocate_pages(pd)) != 0)
     {
-        printk_debug("allocate_pages failed\n");
-        return -EINVAL;
+        return i;
     }
+    init_block_headers();
     for (i=0;i<pd->page_count;++i)
     {
-        if (remap_pfn_range(vma,vma->vm_start+i*PAGE_SIZE,pd->page_ptr[i]>>PAGE_SHIFT,PAGE_SIZE,vma->vm_page_prot))
+
+        if (vm_insert_page(vma,vma->vm_start+i*PAGE_SIZE,virt_to_page(pd->pages[i])))
         {
-            printk_debug("Queue map failed\n");
+            printk_debug("Queue map failed at %d \n",i);
             return -EINVAL;
         }
     }
@@ -165,6 +175,12 @@ static int device_open(struct inode * i, struct file * f)
     if (pd == NULL)
         return -EINVAL;
     memset(pd,0,sizeof(*pd));
+    pd->current_page = 0;
+    pd->page_count = 0;
+    pd->pages = NULL;
+    pd->rd_pos = offsetof(struct block_hdr_t,align);
+    //pd->rd_queue =
+            //pd->wr_queue =
     f->private_data = pd;
     return 0;
 }
@@ -179,36 +195,51 @@ static int device_close(struct inode * i, struct file * f)
     return 0;
 }
 
+/**
+ * An setup command received from user
+ * rounde page to next order and return to user.
+ *
+ */
+int device_setup_map(struct queue_t* pthis,struct queue_info_ *q)
+{
+    if (pthis->pages != NULL)
+    {
+        printk_debug("Queue already setup");
+        return 2;
+    }
+    pthis->page_step = (q->block_size + PAGE_SIZE - 1)/PAGE_SIZE;
+    pthis->page_count = pthis->page_step * q->block_count;
+    pthis->current_page = 0;
+
+    q->block_size = PAGE_SIZE * pthis->page_step;
+    return 0;
+}
+
 long device_ioctl(struct file *file, /* ditto */
          unsigned int ioctl_num,    /* number and param for ioctl */
          unsigned long ioctl_param)
 {
-    struct queue_t* pd = (struct queue_t*)file->private_data;
+    struct queue_t* pthis = (struct queue_t*)file->private_data;
     struct queue_info_ q;
+    int ret;
     /*
      * Switch according to the ioctl called
      */
     switch (ioctl_num) {
     case QUEUE_INIT:
-        if (pd->page_ptr != NULL)
-        {
-            printk_debug("Queue init called twices");
-            return 2;
-        }
+        printk_debug("Queue init\n");
         if (copy_from_user(&q,(void*)ioctl_param,sizeof(struct queue_info_)) !=0 )
         {
+            printk_debug("Queue init copy from user failed");
             return 4;
         }
-        if (q.block_size % PAGE_SIZE)
-                q.block_size += (PAGE_SIZE - q.block_size % PAGE_SIZE);// ((q.block_size+page_size() - 1) / page_size;
+        if ((ret = device_setup_map(pthis,&q)) != 0)
+            return ret;
         if (copy_to_user((void*)ioctl_param,&q,sizeof(struct queue_info_)) != 0)
         {
+            printk_debug("Queue init copy to user failed");
             return 4;
         }
-        pd->page_step = q.block_size / PAGE_SIZE;
-        pd->page_count = pd->page_step * q.block_count;
-        pd->current_page = 0;
-        pd->rd_pos = 6;     //FIXME
         break;
     }
 

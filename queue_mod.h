@@ -15,6 +15,16 @@
 #define u32 uint32_t
 #endif
 
+/**
+ * Block status
+ */
+enum blck_stat_e
+{
+    blck_free = 0,
+    blck_writting,
+    blck_wrote,
+};
+
 // user configuration send from ioctl
 struct queue_info_
 {

@@ -18,7 +18,12 @@ int main()
     nfo.block_size = 1024;
     nfo.block_count = 4;
     f.ioctl(QUEUE_INIT,&nfo);
-    void* p = f.mmap(nullptr,nfo.block_count*nfo.block_size,0);
+    uint8_t* p = (uint8_t*)f.mmap(nullptr,nfo.block_count*nfo.block_size,0);
+    struct block_hdr_t* block[4];
+    for(int i=0;i<4;++i)
+    {
+        block[i] = reinterpret_cast<struct block_hdr_t*>(p+i*nfo.block_size);
+    }
     ::munmap(p,nfo.block_count*nfo.block_size);
     /*
     uint32_t u32;
