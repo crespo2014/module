@@ -8,16 +8,20 @@
 #ifndef QUEUE_MOD_H_
 #define QUEUE_MOD_H_
 
-#define DEVICE_NAME "KernelQueue"
-#define DEVICE_PATH "/dev/queue"
-#define MAGIC_NO 10
-
-#define QUEUE_INIT     _IOWR(MAGIC_NO, 0)
+#include <linux/ioctl.h>
+#include <linux/kdev_t.h> /* for MKDEV */
 
 #ifndef u8
 #define u8 uint8_t
 #define u32 uint32_t
+#define u64 uint64_t
 #endif
+
+
+#define DEVICE_NAME "KernelQueue"
+#define DEVICE_PATH "/dev/queue"
+#define MAGIC_NO 10
+
 
 /**
  * Block status
@@ -44,5 +48,6 @@ struct block_hdr_t
     void* align;    /// offset of this is start position
 };
 
+#define QUEUE_INIT    _IOWR(MAGIC_NO, 0,struct queue_info_)
 
 #endif /* QUEUE_MOD_H_ */
