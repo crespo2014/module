@@ -4,8 +4,8 @@
 #module-objs := readmap.o
 
 #obj-m := module.o 
-#obj-m := tickCount.o
-obj-m := queue.o  
+obj-m := tickCount.o
+#obj-m := queue.o  
 
 ccflags-$(DEBUG) += -DDEBUG
 

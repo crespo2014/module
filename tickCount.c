@@ -111,6 +111,7 @@ static inline uint64_t read_64(void)
 static int sys_open(struct inode * i, struct file * f)
 {
     struct file_data* pd = kmalloc(sizeof(*pd), GFP_KERNEL);
+    printk_debug("tsc::open\t");
     f->private_data = pd;
     pd->len = 0;
     pd->rd_pos = 0;
@@ -145,6 +146,7 @@ static int sys_read(struct file *f, char __user *data, size_t len, loff_t *offse
 static int sys_close(struct inode * i, struct file * f)
 {
     struct queue* pd = (struct queue*) f->private_data;
+    printk_debug("tsc::close\t");
     kfree(pd);
     f->private_data = NULL;
     return 0;
@@ -155,6 +157,9 @@ long device_ioctl(struct file *file, /* ditto */
          unsigned long ioctl_param)
 {
     uint8_t ch;
+    u32 v32;
+    u64 v64;
+    printk_debug("tsc::ioctl %d\n",ioctl_num);
     /*
      * Switch according to the ioctl called
      */
@@ -164,11 +169,23 @@ long device_ioctl(struct file *file, /* ditto */
         tsc_reset(1,ch);
         break;
     case IOCTL_READ_32:
-        put_user(read_32(),(uint32_t*)ioctl_param);
+        v32 = read_32();
+        if (copy_to_user((void*)ioctl_param,&v32,sizeof(v32)) !=0)
+        {
+            printk_debug("tsc copy to user failed\n");
+            return EFAULT;
+        }
         break;
     case IOCTL_READ_64:
-        put_user(read_64(),(uint64_t*)ioctl_param);
+        v64 = read_64();
+        if (copy_to_user((void*)ioctl_param,&v64,sizeof(v64)) !=0)
+        {
+            printk_debug("tsc copy to user failed\n");
+            return EFAULT;
+        }
         break;
+    default:
+        return EINVAL;
     }
     return 0;
 }
@@ -185,7 +202,6 @@ static struct miscdevice misc = { //
         .name = "tsc", //
         .fops = &fops_sys, //
         };
-
 
 
 enum init_level { none,misc_reg,all};
