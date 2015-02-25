@@ -1,6 +1,8 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <stddef.h>
+#include <cstdio>
 
 #include <stdint.h>
 #include <iostream>
@@ -24,6 +26,12 @@ int main()
     {
         block[i] = reinterpret_cast<struct block_hdr_t*>(p+i*nfo.block_size);
     }
+    block[0]->wr_pos_ = offsetof(struct block_hdr_t,align);
+    char* pd = reinterpret_cast<char*>(block[0]);
+
+    block[0]->wr_pos_ += sprintf(pd+block[0]->wr_pos_,"user level app written data");
+    // read from the file
+
     ::munmap(p,nfo.block_count*nfo.block_size);
     /*
     uint32_t u32;
