@@ -100,6 +100,8 @@ void init_block_headers(struct queue_t* pthis)
         pheader->status = blck_free;
         idx += pthis->page_step;
     }
+    pthis->current_page = 0;
+    pthis->rd_pos = offsetof(struct block_hdr_t,align);
 }
 
 int allocate_pages(struct queue_t* pthis)
@@ -137,7 +139,7 @@ void deallocate_pages(struct queue_t* pthis)
 }
 
 // map function
-static int device_mmap(struct file *fd, struct vm_area_struct *vma)
+int device_mmap(struct file *fd, struct vm_area_struct *vma)
 {
     struct queue_t* pd = (struct queue_t*)fd->private_data;
     unsigned long nPages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
@@ -168,24 +170,22 @@ static int device_mmap(struct file *fd, struct vm_area_struct *vma)
     return 0;
 }
 
-static int device_open(struct inode * i, struct file * f)
+int device_open(struct inode * i, struct file * f)
 {
     struct queue_t* pd = kmalloc(sizeof(struct queue_t), GFP_KERNEL);
     printk_debug("Queue sys fs open\n");
     if (pd == NULL)
         return -EINVAL;
     memset(pd,0,sizeof(*pd));
-    pd->current_page = 0;
     pd->page_count = 0;
     pd->pages = NULL;
-    pd->rd_pos = offsetof(struct block_hdr_t,align);
     //pd->rd_queue =
             //pd->wr_queue =
     f->private_data = pd;
     return 0;
 }
 
-static int device_close(struct inode * i, struct file * f)
+int device_close(struct inode * i, struct file * f)
 {
     struct queue_t* pd  = (struct queue_t*)f->private_data;
     printk_debug("Queue sys fs close\n");
@@ -250,7 +250,7 @@ long device_ioctl(struct file *file, /* ditto */
  * Write operation still supported.
  * If null pointer is received this operation is treated as a flush called every a block is full
  */
-static int device_write(struct file *fd,const char __user *data, size_t len, loff_t *offset)
+int device_write(struct file *fd,const char __user *data, size_t len, loff_t *offset)
 {
     struct queue_t* pd = (struct queue_t*)fd->private_data;
     if (data != NULL)
@@ -270,12 +270,36 @@ static int device_write(struct file *fd,const char __user *data, size_t len, lof
  * To be implemented read operation
  * also support for splice is needed as well
  */
-static int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
+int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
 {
-    struct queue_t* pd = (struct queue_t*)fd->private_data;
+    struct queue_t* pthis = (struct queue_t*)fd->private_data;
+    struct block_hdr_t* blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
     printk_debug("Queue read\n");
 
-    return pd->rd_pos;
+    if (pthis->rd_pos >= blck->wr_pos_)
+    {
+        //no more data go to next block if this is finish
+        if (blck->status == blck_wrote)
+        {
+            printk_debug("Leave page %d\n",pthis->current_page);
+            blck->status = blck_free;
+            pthis->current_page += pthis->page_step;
+            pthis->rd_pos = offsetof(struct block_hdr_t,align);
+            if (pthis->current_page >= pthis->page_count)
+            {
+                pthis->current_page = 0;
+                blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
+            }
+        }
+    }
+    printk_debug("rd :%d , wr :%d \n",pthis->rd_pos,blck->wr_pos_);
+
+    if (pthis->rd_pos >= blck->wr_pos_)
+    {
+        return 0;   // no data
+    }
+
+    return blck->wr_pos_ - pthis->rd_pos;
 }
 
 // file operations for misc device

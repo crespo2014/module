@@ -28,15 +28,15 @@ enum blck_stat_e
 // user configuration send from ioctl
 struct queue_info_
 {
-    u32 block_size;  /// user set max size and read back current size
-    u32 block_count; /// user set how many block to allocate
+    volatile u32 block_size;  /// user set max size and read back current size
+    volatile u32 block_count; /// user set how many block to allocate
 };
 
 /// each block has a header
 struct block_hdr_t
 {
-    u8 status;      ///< block status
-    u32 wr_pos_;
+    volatile u8 status;      ///< block status
+    volatile u32 wr_pos_;
     void* align;    /// offset of this is start position
 };
 
