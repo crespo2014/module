@@ -155,7 +155,7 @@ static int device_mmap(struct file *fd, struct vm_area_struct *vma)
     {
         return i;
     }
-    init_block_headers();
+    init_block_headers(pd);
     for (i=0;i<pd->page_count;++i)
     {
 
