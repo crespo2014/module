@@ -4,8 +4,8 @@
 #module-objs := readmap.o
 
 #obj-m := module.o 
-obj-m := tsc.o
-#obj-m := queue.o  
+#obj-m := tsc.o
+obj-m := queue.o  
 
 ccflags-$(DEBUG) += -DDEBUG
 

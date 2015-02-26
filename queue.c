@@ -118,6 +118,7 @@ int allocate_pages(struct queue_t* pthis)
             printk_debug("Failed to allocate page at %d",count);
             return -EINVAL;
         }
+        sprintf((char*)pthis->pages[count] + 8,"kernel area page %d",count);
     }
     return 0;
 }
@@ -275,7 +276,12 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     struct block_hdr_t* blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
     printk_debug("Queue read\n");
-
+    printk_debug("data on page %d %20s\n",pthis->current_page,(char*)&blck->align);
+    // test for no data
+    if (blck->status == blck_free)
+    {
+        return 0;
+    }
     if (pthis->rd_pos >= blck->wr_pos_)
     {
         //no more data go to next block if this is finish

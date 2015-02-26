@@ -30,7 +30,7 @@ int main()
     block[0]->status = blck_writting;
     char* pd = reinterpret_cast<char*>(block[0]);
 
-    block[0]->wr_pos_ += sprintf(pd+block[0]->wr_pos_,"user level app written data");
+    block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"user level app written data");
     // read from the file
     auto s = f.read(nullptr,200,std::nothrow);
 
