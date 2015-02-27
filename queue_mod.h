@@ -13,6 +13,7 @@
 
 #ifndef u8
 #define u8 uint8_t
+#define u16 uint16_t
 #define u32 uint32_t
 #define u64 uint64_t
 #endif
@@ -44,7 +45,7 @@ struct queue_info_
 struct block_hdr_t
 {
     volatile u8 status;      ///< block status
-    volatile u32 wr_pos_;
+    volatile u16 wr_pos_;
     void* align;    /// offset of this is start position
 };
 

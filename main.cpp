@@ -36,6 +36,7 @@ int main()
 
 
     ::munmap(p,nfo.block_count*nfo.block_size);
+    auto s2 = f.read(nullptr,200,std::nothrow);
     /*
     uint32_t u32;
     uint64_t u64,eu64;
