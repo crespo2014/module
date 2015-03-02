@@ -304,21 +304,27 @@ int device_write(struct file *fd,const char __user *data, size_t len, loff_t *of
  */
 int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
 {
+    size_t count = 0;
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     struct block_hdr_t* blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
     printk_debug("Queue read\n");
-    // test for no data
+    // Check if block is not used
     if (blck->status == blck_free)
     {
         return 0;
     }
+    if (data == NULL)
+    {
+        // trigger something
+        return 0;
+    }
+    // check for data and go to next if it is filled
     if (pthis->rd_pos >= blck->wr_pos_)
     {
         //no more data go to next block if this is finish
         if (blck->status == blck_wrote)
         {
-            printk_debug("Leave page %d\n",pthis->current_page);
-            blck->status = blck_free;
+            printk_debug("Leave page %d\n", pthis->current_page);blck->status = blck_free;
             pthis->current_page += pthis->page_step;
             pthis->rd_pos = offsetof(struct block_hdr_t,align);
             if (pthis->current_page >= pthis->page_count)
@@ -328,14 +334,21 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
             }
         }
     }
-    printk_debug("rd :%d , wr :%d \n",pthis->rd_pos,blck->wr_pos_);
+    printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, blck->wr_pos_);
 
-    if (pthis->rd_pos >= blck->wr_pos_)
+    if (pthis->rd_pos < blck->wr_pos_)
     {
-        return 0;   // no data
+        count = blck->wr_pos_ - pthis->rd_pos;
+        if (count > len)
+            count = len;
+        if ( copy_to_user(data,(u8*)(blck)+ pthis->rd_pos,count) !=0 )
+        {
+            printk_debug("Queue init copy to user failed");
+            return 0;
+        }
+        pthis->rd_pos += count;
     }
-
-    return blck->wr_pos_ - pthis->rd_pos;
+    return count;
 }
 
 // file operations for misc device

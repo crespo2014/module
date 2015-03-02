@@ -34,7 +34,8 @@ int main()
 
     block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"user level app written data");
     // read from the file
-    auto s = f.read(nullptr,200,std::nothrow);
+    char b[1000];
+    auto s = f.read(b,sizeof(b),std::nothrow);
 
 
     ::munmap(p,nfo.block_count*nfo.block_size);
