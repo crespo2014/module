@@ -39,23 +39,7 @@ int main()
 
     ::munmap(p,nfo.block_count*nfo.block_size);
     auto s2 = f.read(nullptr,200,std::nothrow);
-    /*
-    uint32_t u32;
-    uint64_t u64,eu64;
-    char divider =1;
-    POSIX::File f("/dev/tsc", O_RDONLY);
-    f.ioctl(IOCTL_RESET,&divider);
-    f.ioctl(IOCTL_READ_32,&u32);
-    f.ioctl(IOCTL_READ_64,&u64);
-    std::cout << std::endl << u64 <<std::endl;
-    for (int i =1;i<5;i++)
-    {
-        std::cout << "1";
-    }
-    f.ioctl(IOCTL_READ_64,&eu64);
-    std::cout << std::endl << eu64 <<std::endl;
-    std::cout << eu64 -u64 << std::endl;
-    */
+
     } catch (const std::exception& e)
     {
         std::cout << e.what() << std::endl;

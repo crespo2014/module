@@ -274,21 +274,27 @@ long device_ioctl(struct file *file, /* ditto */
 
 /*
  * Write operation still supported.
- * If null pointer is received this operation is treated as a flush called every a block is full
+ * If null pointer is received this operation is treated as a flush called every time a block is filled
+ * write must not be allowed if mapping is done
  */
 int device_write(struct file *fd,const char __user *data, size_t len, loff_t *offset)
 {
-    struct queue_t* pd = (struct queue_t*)fd->private_data;
+    struct queue_t* pthis = (struct queue_t*)fd->private_data;
+    if (pthis->pages != NULL)
+    {
+        // do a flush and notify to read side to keep reading
+
+    }
     if (data != NULL)
     {
         // fill current written block and append data must be space for all or nothing
     }
     else
     {
-        // do a flush and notify to read side to keep reading
+
         //pd->
     }
-    return pd->rd_pos;
+    return pthis->rd_pos;
 }
 
 
@@ -301,7 +307,6 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     struct block_hdr_t* blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
     printk_debug("Queue read\n");
-    printk_debug("data on page %d %20s\n",pthis->current_page,(char*)&blck->align);
     // test for no data
     if (blck->status == blck_free)
     {

@@ -39,5 +39,9 @@ module:
 	
 test: main.cpp ../cpp-lib/posix/File.cpp
 	g++ -g -o test --std=c++11 $^
+	
+tsc_test: tsc_test.cpp ../cpp-lib/posix/File.cpp
+	g++ -g -o tsc_test --std=c++11 $^
+		
 clean:
 	rm -f *.ko *.mod.* *.order *.o
