@@ -37,6 +37,11 @@ int main()
     char b[1000];
     auto s = f.read(b,sizeof(b),std::nothrow);
 
+    s = f.read(b,sizeof(b),std::nothrow);
+
+    block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"more data");
+    s = f.read(b,sizeof(b),std::nothrow);
+
 
     ::munmap(p,nfo.block_count*nfo.block_size);
     auto s2 = f.read(nullptr,200,std::nothrow);
