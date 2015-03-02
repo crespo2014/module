@@ -106,6 +106,8 @@ void init_block_headers(struct queue_t* pthis)
 
 int allocate_pages(struct queue_t* pthis)
 {
+    gfp_t gfp_flags = GFP_KERNEL | __GFP_COMP | __GFP_ZERO | __GFP_NOWARN | __GFP_NORETRY;
+
     unsigned count = pthis->page_count;
     pthis->pages = kmalloc(count*sizeof(void*), GFP_KERNEL);
 
@@ -113,7 +115,7 @@ int allocate_pages(struct queue_t* pthis)
     memset(pthis->pages,0,count*sizeof(void*));
     while (count--)
     {
-        if ((pthis->pages[count] = (void*)get_zeroed_page(GFP_KERNEL)) == 0)
+        if ((pthis->pages[count] = (void*)get_zeroed_page(gfp_flags)) == 0)
         {
             printk_debug("Failed to allocate page at %d",count);
             return -EINVAL;
@@ -138,6 +140,27 @@ void deallocate_pages(struct queue_t* pthis)
     kfree(pthis->pages);
     pthis->pages = NULL;
 }
+/**
+ * Acess to the page to keep count how many times is used the memory
+ */
+
+//static void mm_open(struct vm_area_struct *vma)
+//{
+//    struct queue_t* pthis = (struct queue_t*)vma->vm_file->private_data;
+//    printk_debug("mm open request from 0x%lX to 0x%lX flags: 0x%lX \n",vma->vm_start,vma->vm_end,vma->vm_flags);
+//}
+//
+//static void mm_close(struct vm_area_struct *vma)
+//{
+//    struct queue_t* pthis = (struct queue_t*)vma->vm_file->private_data;
+//    printk_debug("mm close request from 0x%lX to 0x%lX flags: 0x%lX \n",vma->vm_start,vma->vm_end,vma->vm_flags);
+//}
+
+//static const struct vm_operations_struct queue_mmap_ops = { //
+//    .open = mm_open, //
+//    .close = mm_close, //
+//    };
+
 
 // map function
 int device_mmap(struct file *fd, struct vm_area_struct *vma)
@@ -147,7 +170,7 @@ int device_mmap(struct file *fd, struct vm_area_struct *vma)
     int i;
 
     // trace all information
-    printk_debug("mmap request from 0x%lX to 0x%lX\n",vma->vm_start,vma->vm_end);
+    printk_debug("mmap request from 0x%lX to 0x%lX flags: 0x%lX \n",vma->vm_start,vma->vm_end,vma->vm_flags);
 
     if ((pd->page_count == 0) || (pd->pages != NULL) || (nPages != pd->page_count))
     {
@@ -168,6 +191,8 @@ int device_mmap(struct file *fd, struct vm_area_struct *vma)
             return -EINVAL;
         }
     }
+    //vma->vm_ops = &queue_mmap_ops;
+    //vma->vm_flags |= (VM_DONTCOPY | VM_WRITE); // does not work
     return 0;
 }
 

@@ -15,12 +15,14 @@
 
 int main()
 {
-    POSIX::File f("/dev/queue", O_RDONLY);
+    try
+    {
+    POSIX::File f("/dev/queue", O_RDWR);
     queue_info_ nfo;
     nfo.block_size = 1024;
     nfo.block_count = 4;
     f.ioctl(QUEUE_INIT,&nfo);
-    uint8_t* p = (uint8_t*)f.mmap(nullptr,nfo.block_count*nfo.block_size,0);
+    uint8_t* p = (uint8_t*)f.mmap(nullptr,nfo.block_count*nfo.block_size,PROT_READ | PROT_WRITE,MAP_SHARED);
     struct block_hdr_t* block[4];
     for(int i=0;i<4;++i)
     {
@@ -54,5 +56,9 @@ int main()
     std::cout << std::endl << eu64 <<std::endl;
     std::cout << eu64 -u64 << std::endl;
     */
+    } catch (const std::exception& e)
+    {
+        std::cout << e.what() << std::endl;
+    }
     return 0;
 }
