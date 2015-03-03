@@ -41,6 +41,15 @@ struct queue_info_
     volatile u32 block_count; /// user set how many block to allocate
 };
 
+/*
+ * timeouts configuration structure
+ */
+struct queue_timeouts_t
+{
+    u32 read_timeout_ms;
+    u32 write_tieout_ms;
+};
+
 /// each block has a header
 struct block_hdr_t
 {

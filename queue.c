@@ -62,6 +62,8 @@
 #include <linux/mm.h>  // mmap related stuff
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/wait.h>
+#include <linux/sched.h>
 
 #include "queue_mod.h"
 
@@ -84,6 +86,7 @@ struct queue_t
     u8 current_page;   /// current reading block
     u32 rd_pos;        /// current reading pos from current page
     void** pages;    /// continue memory allocated pages
+    struct block_hdr_t* current_block;  /// Redundant information can be deducted from current-page
     wait_queue_head_t rd_queue,wr_queue;       /* read and write wait queues for blocking operations */
 };
 
@@ -101,6 +104,7 @@ void init_block_headers(struct queue_t* pthis)
         idx += pthis->page_step;
     }
     pthis->current_page = 0;
+    pthis->current_block = (struct block_hdr_t*)pthis->pages[pthis->current_page];
     pthis->rd_pos = offsetof(struct block_hdr_t,align);
 }
 
@@ -198,16 +202,18 @@ int device_mmap(struct file *fd, struct vm_area_struct *vma)
 
 int device_open(struct inode * i, struct file * f)
 {
-    struct queue_t* pd = kmalloc(sizeof(struct queue_t), GFP_KERNEL);
-    printk_debug("Queue sys fs open\n");
-    if (pd == NULL)
+    struct queue_t* pthis = kmalloc(sizeof(struct queue_t), GFP_KERNEL);
+    printk_debug("Queue open\n");
+    if (pthis == NULL)
+    {
+        printk_debug("Queue kmalloc failed \n");
         return -EINVAL;
-    memset(pd,0,sizeof(*pd));
-    pd->page_count = 0;
-    pd->pages = NULL;
-    //pd->rd_queue =
-            //pd->wr_queue =
-    f->private_data = pd;
+    }
+    memset(pthis,0,sizeof(*pthis));
+    pthis->page_count = 0;
+    pthis->pages = NULL;
+    init_waitqueue_head(&pthis->rd_queue);
+    f->private_data = pthis;
     return 0;
 }
 
@@ -231,7 +237,7 @@ int device_setup_map(struct queue_t* pthis,struct queue_info_ *q)
     if (pthis->pages != NULL)
     {
         printk_debug("Queue already setup");
-        return 2;
+        return -EEXIST;
     }
     pthis->page_step = (q->block_size + PAGE_SIZE - 1)/PAGE_SIZE;
     pthis->page_count = pthis->page_step * q->block_count;
@@ -257,14 +263,14 @@ long device_ioctl(struct file *file, /* ditto */
         if (copy_from_user(&q,(void*)ioctl_param,sizeof(struct queue_info_)) !=0 )
         {
             printk_debug("Queue init copy from user failed");
-            return 4;
+            return -EFAULT;
         }
         if ((ret = device_setup_map(pthis,&q)) != 0)
             return ret;
         if (copy_to_user((void*)ioctl_param,&q,sizeof(struct queue_info_)) != 0)
         {
             printk_debug("Queue init copy to user failed");
-            return 4;
+            return -EFAULT;
         }
         break;
     }
@@ -291,26 +297,53 @@ int device_write(struct file *fd,const char __user *data, size_t len, loff_t *of
     }
     else
     {
-
         //pd->
     }
+    wake_up(&pthis->rd_queue);
     return pthis->rd_pos;
 }
 
 
+bool canRead(struct queue_t* pthis)
+{
+    // move to next block if necessary
+    if ((pthis->rd_pos == pthis->current_block->wr_pos_) && (pthis->current_block->status == blck_wrote))
+    {
+        //no more data go to next block if this is finish
+        printk_debug("Leaving page %d\n", pthis->current_page);
+        pthis->current_block->status = blck_free;
+        pthis->current_page += pthis->page_step;
+        pthis->rd_pos = offsetof(struct block_hdr_t,align);
+        if (pthis->current_page >= pthis->page_count)
+        {
+            pthis->current_page = 0;
+            pthis->current_block = (struct block_hdr_t*)pthis->pages[pthis->current_page];
+        }
+    }
+    return (pthis->rd_pos < pthis->current_block->wr_pos_);
+}
 /*
  * To be implemented read operation
  * also support for splice is needed as well
  */
 int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
 {
+    int r;
     size_t count = 0;
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
-    struct block_hdr_t* blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
     printk_debug("Queue read\n");
-    // Check if block is not used
-    if (blck->status == blck_free)
+
+    // wait for data
+    if (!canRead(pthis))
     {
+        if (fd->f_flags &  O_NONBLOCK)
+            return -EAGAIN;
+        r = wait_event_interruptible_timeout(pthis->rd_queue, canRead(pthis) , 2*HZ);   // 2 seconds
+        if (r != 0)
+        {
+            printk_debug("Queue read wait ret %d\n",r);
+            return  -ERESTARTSYS;
+        }
         return 0;
     }
     if (data == NULL)
@@ -319,29 +352,14 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
         return 0;
     }
     // check for data and go to next if it is filled
-    if (pthis->rd_pos >= blck->wr_pos_)
-    {
-        //no more data go to next block if this is finish
-        if (blck->status == blck_wrote)
-        {
-            printk_debug("Leave page %d\n", pthis->current_page);blck->status = blck_free;
-            pthis->current_page += pthis->page_step;
-            pthis->rd_pos = offsetof(struct block_hdr_t,align);
-            if (pthis->current_page >= pthis->page_count)
-            {
-                pthis->current_page = 0;
-                blck = (struct block_hdr_t*)pthis->pages[pthis->current_page];
-            }
-        }
-    }
-    printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, blck->wr_pos_);
+    printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, pthis->current_block->wr_pos_);
 
-    if (pthis->rd_pos < blck->wr_pos_)
+    if (pthis->rd_pos < pthis->current_block->wr_pos_)
     {
-        count = blck->wr_pos_ - pthis->rd_pos;
+        count = pthis->current_block->wr_pos_ - pthis->rd_pos;
         if (count > len)
             count = len;
-        if ( copy_to_user(data,(u8*)(blck)+ pthis->rd_pos,count) !=0 )
+        if ( copy_to_user(data,(u8*)(pthis->current_block)+ pthis->rd_pos,count) !=0 )
         {
             printk_debug("Queue init copy to user failed");
             return 0;
