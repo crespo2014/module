@@ -64,6 +64,7 @@
 #include <linux/types.h>
 #include <linux/wait.h>
 #include <linux/sched.h>
+#include <linux/poll.h>
 
 #include "queue_mod.h"
 
@@ -338,7 +339,6 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
         // trigger something
         return 0;
     }
-
     // wait for data
     if (!canRead(pthis))
     {
@@ -369,12 +369,31 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
     }
     return count;
 }
+/*
+ * Kernel will call this function twice
+ * 1 . all queue waiter are collected nad mask updated
+ * 2. if timeout or any wait queue is trigger then the mask is updated
+ */
+unsigned int queue_poll(struct file *fd, struct poll_table_struct *pwait)
+{
+    unsigned int mask=0;
+    struct queue_t* pthis = (struct queue_t*)fd->private_data;
+    printk_debug("Queue poll\n");
+    poll_wait(fd,&pthis->rd_queue,pwait);
+    if (canRead(pthis))
+    {
+        printk_debug("Queue poll can read\n");
+        mask |= (POLLIN | POLLRDNORM);
+    }
+    return mask;
+}
 
 // file operations for misc device
 static struct file_operations fops_sys = { //
         .open = device_open, //
         .read = device_read, //
         .write = device_write, //
+        .poll = queue_poll, //
         .mmap = device_mmap, //
         .unlocked_ioctl = device_ioctl, //
         .release = device_close, //

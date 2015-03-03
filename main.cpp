@@ -7,6 +7,7 @@
 #include <thread>
 #include <chrono>
 
+
 #include <stdint.h>
 #include <iostream>
 #include <sys/mman.h>
@@ -48,13 +49,36 @@ int main()
 
     // blocking read to be release in 5 seconds
     s = f.read(b,sizeof(b),std::nothrow);
+    th.join();
 
     block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"more data");
     s = f.read(b,sizeof(b),std::nothrow);
 
+    //Pool for incoming data
+    short events;
+    bool br;
+    br = f.poll(POLLIN,events,3000,std::nothrow);
+    block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
+    br = f.poll(POLLIN,events,3000,std::nothrow);
+    s = f.read(b,200,std::nothrow);
+
+    std::thread th1([&]()
+    {
+        std::this_thread::sleep_for(std::chrono::seconds(2));
+        block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
+        f.write(nullptr,0);
+    });
+    br = f.poll(POLLIN,events,4000,std::nothrow);
+    s = f.read(b,200,std::nothrow);
+    th1.join();
+    //jump from one buffer to another
+
+    //define read timeout
+
 
     ::munmap(p,nfo.block_count*nfo.block_size);
-    auto s2 = f.read(nullptr,200,std::nothrow);
+    //s = f.read(nullptr,200,std::nothrow);
+
 
     } catch (const std::exception& e)
     {
