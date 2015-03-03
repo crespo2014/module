@@ -287,6 +287,7 @@ long device_ioctl(struct file *file, /* ditto */
 int device_write(struct file *fd,const char __user *data, size_t len, loff_t *offset)
 {
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
+    printk_debug("Queue write\n");
     if (pthis->pages != NULL)
     {
         // do a flush and notify to read side to keep reading
@@ -300,8 +301,8 @@ int device_write(struct file *fd,const char __user *data, size_t len, loff_t *of
     {
         //pd->
     }
-    wake_up(&pthis->rd_queue);
-    return pthis->rd_pos;
+    wake_up_interruptible(&pthis->rd_queue);
+    return 0;
 }
 
 

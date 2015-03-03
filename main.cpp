@@ -18,6 +18,7 @@
 
 int main()
 {
+    std::cout.setf(std::ios_base::unitbuf);
     try
     {
     POSIX::File f("/dev/queue", O_RDWR /*| O_NONBLOCK*/);
@@ -38,21 +39,27 @@ int main()
     block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"user level app written data");
     // read from the file
     char b[1000];
+    std::cout << "1";
     auto s = f.read(b,sizeof(b),std::nothrow);
+    std::cout << "1";
 
         std::thread th([&]()
         {
+            std::cout << "2";
             std::this_thread::sleep_for(std::chrono::seconds(5));
             block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
             f.write(nullptr,0);
+            std::cout << "2";
         });
 
     // blocking read to be release in 5 seconds
     s = f.read(b,sizeof(b),std::nothrow);
     th.join();
+    std::cout << "1";
 
     block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"more data");
     s = f.read(b,sizeof(b),std::nothrow);
+    std::cout << "1";
 
     //Pool for incoming data
     short events;
@@ -61,15 +68,18 @@ int main()
     block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
     br = f.poll(POLLIN,events,3000,std::nothrow);
     s = f.read(b,200,std::nothrow);
+    std::cout << "1";
 
     std::thread th1([&]()
     {
+        std::cout << "2";
         std::this_thread::sleep_for(std::chrono::seconds(2));
         block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
         f.write(nullptr,0);
     });
     br = f.poll(POLLIN,events,4000,std::nothrow);
     s = f.read(b,200,std::nothrow);
+    std::cout << "1";
     th1.join();
     //jump from one buffer to another
 
