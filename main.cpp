@@ -4,6 +4,8 @@
 #include <stddef.h>
 #include <cstdio>
 #include <new>
+#include <thread>
+#include <chrono>
 
 #include <stdint.h>
 #include <iostream>
@@ -17,7 +19,7 @@ int main()
 {
     try
     {
-    POSIX::File f("/dev/queue", O_RDWR);
+    POSIX::File f("/dev/queue", O_RDWR /*| O_NONBLOCK*/);
     queue_info_ nfo;
     nfo.block_size = 1024;
     nfo.block_count = 4;
@@ -37,6 +39,14 @@ int main()
     char b[1000];
     auto s = f.read(b,sizeof(b),std::nothrow);
 
+        std::thread th([&]()
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
+            f.write(nullptr,0);
+        });
+
+    // blocking read to be release in 5 seconds
     s = f.read(b,sizeof(b),std::nothrow);
 
     block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"more data");

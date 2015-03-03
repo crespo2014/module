@@ -333,23 +333,24 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     printk_debug("Queue read\n");
 
+    if (data == NULL)
+    {
+        // trigger something
+        return 0;
+    }
+
     // wait for data
     if (!canRead(pthis))
     {
         if (fd->f_flags &  O_NONBLOCK)
             return -EAGAIN;
-        r = wait_event_interruptible_timeout(pthis->rd_queue, canRead(pthis) , 2*HZ);   // 2 seconds
+        //r = wait_event_interruptible_timeout(pthis->rd_queue, canRead(pthis) , 2*HZ);   // 2 seconds
+        r = wait_event_interruptible(pthis->rd_queue, canRead(pthis));
         if (r != 0)
         {
             printk_debug("Queue read wait ret %d\n",r);
             return  -ERESTARTSYS;
         }
-        return 0;
-    }
-    if (data == NULL)
-    {
-        // trigger something
-        return 0;
     }
     // check for data and go to next if it is filled
     printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, pthis->current_block->wr_pos_);

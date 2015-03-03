@@ -38,7 +38,7 @@ module:
 	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
 	
 test: main.cpp ../cpp-lib/posix/File.cpp
-	g++ -g -o test --std=c++11 $^
+	g++ -g -o test -lpthread --std=c++11 $^
 	
 tsc_test: tsc_test.cpp ../cpp-lib/posix/File.cpp
 	g++ -g -o tsc_test --std=c++11 $^
