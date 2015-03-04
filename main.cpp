@@ -13,7 +13,7 @@
 #include <sys/mman.h>
 
 #include "../cpp-lib/posix/File.h"
-#include "queue_mod.h"
+#include "queue.h"
 #include "linux/types.h"
 
 int main()
@@ -32,7 +32,7 @@ int main()
     {
         block[i] = reinterpret_cast<struct block_hdr_t*>(p+i*nfo.block_size);
     }
-    block[0]->wr_pos_ = offsetof(struct block_hdr_t,align);
+    block[0]->wr_pos_ = nfo.block_start_offset;
     block[0]->status = blck_writting;
     char* pd = reinterpret_cast<char*>(block[0]);
 

@@ -10,14 +10,7 @@
 
 #include <linux/ioctl.h>
 #include <linux/kdev_t.h> /* for MKDEV */
-
-#ifndef u8
-#define u8 uint8_t
-#define u16 uint16_t
-#define u32 uint32_t
-#define u64 uint64_t
-#endif
-
+#include <linux/types.h>
 
 #define DEVICE_NAME "KernelQueue"
 #define DEVICE_PATH "/dev/queue"
@@ -30,15 +23,18 @@
 enum blck_stat_e
 {
     blck_free = 0,
-    blck_writting,
-    blck_wrote,
+    blck_writting,      // user writing this block
+    blck_wrote,         // user finish with this block
+    blck_kernel_lock,   // kernel leave this block but could be lock if ref count is not 0
+
 };
 
 // user configuration send from ioctl
 struct queue_info_
 {
-    volatile u32 block_size;  /// user set max size and read back current size
-    volatile u32 block_count; /// user set how many block to allocate
+    volatile __u32 block_size;  /// user set max size and read back current size
+    volatile __u32 block_count; /// user set how many block to allocate
+    volatile __u32 block_start_offset;  //space need by kernel
 };
 
 /*
@@ -46,16 +42,15 @@ struct queue_info_
  */
 struct queue_timeouts_t
 {
-    u32 read_timeout_ms;
-    u32 write_tieout_ms;
+    __u32 read_timeout_ms;
+    __u32 write_tieout_ms;
 };
 
 /// each block has a header
 struct block_hdr_t
 {
-    volatile u8 status;      ///< block status
-    volatile u16 wr_pos_;
-    void* align;    /// offset of this is start position
+    volatile __u8 status;      ///< block status
+    volatile __u16 wr_pos_;
 };
 
 #define QUEUE_INIT    _IOWR(MAGIC_NO, 0,struct queue_info_)

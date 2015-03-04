@@ -65,14 +65,27 @@
 #include <linux/wait.h>
 #include <linux/sched.h>
 #include <linux/poll.h>
+//#include <linux/atomic.h>
+#include <asm/atomic.h>
 
-#include "queue_mod.h"
+#include "queue.h"
 
 #ifdef DEBUG
 #define printk_debug(...) printk(__VA_ARGS__)
 #else
 #define printk_debug(...) do {} while(0)
 #endif
+
+/*
+ * Block header is made of user data plus kernel data.
+ * then offset of data is determine by kernel
+ */
+struct blck_header_krn_t
+{
+    struct block_hdr_t user_;   ///user data or header
+    atomic_t refcount;  ///used by driver to release the block
+    void*   data;       /// it is not a pointer to data it is alignment type
+};
 
 /*
  * Section information use by the module
@@ -87,7 +100,7 @@ struct queue_t
     u8 current_page;   /// current reading block
     u32 rd_pos;        /// current reading pos from current page
     void** pages;    /// continue memory allocated pages
-    struct block_hdr_t* current_block;  /// Redundant information can be deducted from current-page
+    struct blck_header_krn_t* current_block;  /// Redundant information can be deducted from current-page
     wait_queue_head_t rd_queue,wr_queue;       /* read and write wait queues for blocking operations */
 };
 
@@ -97,16 +110,17 @@ struct queue_t
 void init_block_headers(struct queue_t* pthis)
 {
     unsigned idx = 0;
-    struct block_hdr_t* pheader;
+    struct blck_header_krn_t* pheader;
     while (idx < pthis->page_count)
     {
-        pheader = (struct block_hdr_t*)pthis->pages[idx];
-        pheader->status = blck_free;
+        pheader = (struct blck_header_krn_t*)pthis->pages[idx];
+        pheader->user_.status = blck_free;
+        atomic_set(&pheader->refcount,0);
         idx += pthis->page_step;
     }
     pthis->current_page = 0;
-    pthis->current_block = (struct block_hdr_t*)pthis->pages[pthis->current_page];
-    pthis->rd_pos = offsetof(struct block_hdr_t,align);
+    pthis->current_block = (struct blck_header_krn_t*)pthis->pages[pthis->current_page];
+    pthis->rd_pos = offsetof(struct blck_header_krn_t,data);
 }
 
 int allocate_pages(struct queue_t* pthis)
@@ -245,6 +259,7 @@ int device_setup_map(struct queue_t* pthis,struct queue_info_ *q)
     pthis->current_page = 0;
 
     q->block_size = PAGE_SIZE * pthis->page_step;
+    q->block_start_offset = offsetof(struct blck_header_krn_t,data);
     return 0;
 }
 
@@ -291,7 +306,6 @@ int device_write(struct file *fd,const char __user *data, size_t len, loff_t *of
     if (pthis->pages != NULL)
     {
         // do a flush and notify to read side to keep reading
-
     }
     if (data != NULL)
     {
@@ -305,25 +319,71 @@ int device_write(struct file *fd,const char __user *data, size_t len, loff_t *of
     return 0;
 }
 
+struct buffer
+{
+    void* data;
+    unsigned size;  // IN - max read size  OUT - current data
+};
+/*
+ *
+ */
+void releaseBlock(struct blck_header_krn_t* blck)
+{
+    if (atomic_dec_and_test(&blck->refcount) )
+    {
+        blck->user_.wr_pos_ = 0;          // kernel can jump to this block, avoid using it
+        blck->user_.status = blck_free;
+    }
+}
 
+void lockBlock(struct blck_header_krn_t* blck)
+{
+    atomic_inc(&blck->refcount);
+}
+
+/**
+ * This function has to be used inside spin lock that also coverage block lock and release
+ * it checks if there is data that can be rea from buffer and jump to next block if it is necessary
+ */
 bool canRead(struct queue_t* pthis)
 {
+    __u8 next = 0;
+    // todo use a spinlock
+
     // move to next block if necessary
-    if ((pthis->rd_pos == pthis->current_block->wr_pos_) && (pthis->current_block->status == blck_wrote))
+    if ((pthis->rd_pos == pthis->current_block->user_.wr_pos_) && (pthis->current_block->user_.status == blck_wrote))
     {
-        //no more data go to next block if this is finish
-        printk_debug("Leaving page %d\n", pthis->current_page);
-        pthis->current_block->status = blck_free;
-        pthis->current_page += pthis->page_step;
-        pthis->rd_pos = offsetof(struct block_hdr_t,align);
-        if (pthis->current_page >= pthis->page_count)
+        // do not jump to next block if it is still in use by kernel
+        next = pthis->current_page + pthis->page_step;
+        if (next >= pthis->page_count)
+            next = 0;
+        if ( ((struct blck_header_krn_t*)pthis->pages[next])->user_.status != blck_kernel_lock)
         {
-            pthis->current_page = 0;
-            pthis->current_block = (struct block_hdr_t*)pthis->pages[pthis->current_page];
+            //no more data go to next block if this is finish
+            printk_debug("Leaving page %d\n", pthis->current_page);
+            pthis->current_block->user_.status = blck_kernel_lock;
+            releaseBlock(pthis->current_block);
+            pthis->current_page = next;
+            pthis->current_block = (struct blck_header_krn_t*)pthis->pages[pthis->current_page];
+            pthis->rd_pos = offsetof(struct blck_header_krn_t,data);
+            lockBlock(pthis->current_block);
         }
     }
-    return (pthis->rd_pos < pthis->current_block->wr_pos_);
+    return (pthis->rd_pos < pthis->current_block->user_.wr_pos_);
 }
+
+/**
+ * Get a read block form buffer using spinlock
+ * Block can have reference counter to avoid been release
+ */
+void getReadBlock(struct queue_t* pthis,struct buffer* buff)
+{
+    if (canRead(pthis))
+    {
+        lockBlock(pthis->current_block);
+    }
+}
+
 /*
  * To be implemented read operation
  * also support for splice is needed as well
@@ -354,11 +414,11 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
         }
     }
     // check for data and go to next if it is filled
-    printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, pthis->current_block->wr_pos_);
+    printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, pthis->current_block->user_.wr_pos_);
 
-    if (pthis->rd_pos < pthis->current_block->wr_pos_)
+    if (pthis->rd_pos < pthis->current_block->user_.wr_pos_)
     {
-        count = pthis->current_block->wr_pos_ - pthis->rd_pos;
+        count = pthis->current_block->user_.wr_pos_ - pthis->rd_pos;
         if (count > len)
             count = len;
         if ( copy_to_user(data,(u8*)(pthis->current_block)+ pthis->rd_pos,count) !=0 )
