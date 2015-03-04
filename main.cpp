@@ -43,14 +43,14 @@ int main()
     auto s = f.read(b,sizeof(b),std::nothrow);
     std::cout << "1";
 
-        std::thread th([&]()
-        {
-            std::cout << "2";
-            std::this_thread::sleep_for(std::chrono::seconds(5));
-            block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
-            f.write(nullptr,0);
-            std::cout << "2";
-        });
+    std::thread th([&]()
+    {
+        std::cout << "2";
+        std::this_thread::sleep_for(std::chrono::seconds(5));
+        block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
+        f.write(nullptr,0);
+        std::cout << "2";
+    });
 
     // blocking read to be release in 5 seconds
     s = f.read(b,sizeof(b),std::nothrow);
@@ -84,6 +84,8 @@ int main()
     //jump from one buffer to another
 
     //define read timeout
+
+    // do multithread reading and check that all bytes has been read
 
 
     ::munmap(p,nfo.block_count*nfo.block_size);

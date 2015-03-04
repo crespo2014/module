@@ -102,6 +102,7 @@ struct queue_t
     void** pages;    /// continue memory allocated pages
     struct blck_header_krn_t* current_block;  /// Redundant information can be deducted from current-page
     wait_queue_head_t rd_queue,wr_queue;       /* read and write wait queues for blocking operations */
+    spinlock_t rd_lock;
 };
 
 /**
@@ -228,6 +229,7 @@ int device_open(struct inode * i, struct file * f)
     pthis->page_count = 0;
     pthis->pages = NULL;
     init_waitqueue_head(&pthis->rd_queue);
+    spin_lock_init(&pthis->rd_lock);
     f->private_data = pthis;
     return 0;
 }
@@ -378,10 +380,20 @@ bool canRead(struct queue_t* pthis)
  */
 void getReadBlock(struct queue_t* pthis,struct buffer* buff)
 {
+    unsigned count = 0;
+    spin_lock(&pthis->rd_lock);
     if (canRead(pthis))
     {
         lockBlock(pthis->current_block);
+        count = pthis->current_block->user_.wr_pos_  - pthis->rd_pos;
+        if (count > buff->size)
+            count = buff->size;
+        else
+            buff->size = count;
+        buff->data = ((__u8*)pthis->current_block) + pthis->rd_pos;
+        pthis->rd_pos += count;
     }
+    spin_unlock(&pthis->rd_lock);
 }
 
 /*
