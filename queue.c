@@ -451,13 +451,17 @@ unsigned int queue_poll(struct file *fd, struct poll_table_struct *pwait)
 {
     unsigned int mask=0;
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
-    printk_debug("Queue poll\n");
     poll_wait(fd,&pthis->rd_queue,pwait);
+    spin_lock(&pthis->rd_lock);
     if (canRead(pthis))
     {
         printk_debug("Queue poll can read\n");
         mask |= (POLLIN | POLLRDNORM);
     }
+    else
+        printk_debug("Queue poll not data to read \n");
+    spin_unlock(&pthis->rd_lock);
+
     return mask;
 }
 
