@@ -6,15 +6,33 @@
 #include <new>
 #include <thread>
 #include <chrono>
+#include <vector>
+#include <atomic>
 
 
 #include <stdint.h>
 #include <iostream>
 #include <sys/mman.h>
 
-#include "../cpp-lib/posix/File.h"
-#include "queue.h"
+#include "../../cpp-lib/posix/File.h"
+#include "../queue.h"
 #include "linux/types.h"
+
+
+std::atomic<bool> readLock;
+
+/**
+ * A thread function that read 10 times 5 bytes
+ */
+void doRead(POSIX::File* f)
+{
+    while (readLock) {};
+    char buff[5];
+    unsigned i = 10;
+    while(i--)
+        f->read(buff,5);
+}
+
 
 int main()
 {
@@ -86,7 +104,21 @@ int main()
     //define read timeout
 
     // do multithread reading and check that all bytes has been read
-
+    readLock.store(true);
+    std::vector<std::thread> threads;
+    threads.emplace_back(doRead,&f);        // read 10 x 5 = 50
+    threads.emplace_back(doRead,&f);
+    threads.emplace_back(doRead,&f);
+    threads.emplace_back(doRead,&f);
+    block[0]->wr_pos_ += 200;
+    usleep(100);
+    readLock.store(false);
+    for( auto& t : threads)
+    {
+        t.join();
+    }
+    // all data has to be conssumed
+    br = f.poll(POLLIN,events,0,std::nothrow); // to be false
 
     ::munmap(p,nfo.block_count*nfo.block_size);
     //s = f.read(nullptr,200,std::nothrow);

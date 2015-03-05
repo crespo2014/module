@@ -321,9 +321,10 @@ int device_write(struct file *fd,const char __user *data, size_t len, loff_t *of
     return 0;
 }
 
-struct buffer
+struct buffer_t
 {
-    void* data;
+    struct blck_header_krn_t* blck;
+    unsigned rd_pos;
     unsigned size;  // IN - max read size  OUT - current data
 };
 /*
@@ -378,7 +379,7 @@ bool canRead(struct queue_t* pthis)
  * Get a read block form buffer using spinlock
  * Block can have reference counter to avoid been release
  */
-void getReadBlock(struct queue_t* pthis,struct buffer* buff)
+void getReadBlock(struct queue_t* pthis,struct buffer_t* buff)
 {
     unsigned count = 0;
     spin_lock(&pthis->rd_lock);
@@ -390,7 +391,8 @@ void getReadBlock(struct queue_t* pthis,struct buffer* buff)
             count = buff->size;
         else
             buff->size = count;
-        buff->data = ((__u8*)pthis->current_block) + pthis->rd_pos;
+        buff->blck = pthis->current_block;
+        buff->rd_pos = pthis->rd_pos;
         pthis->rd_pos += count;
     }
     spin_unlock(&pthis->rd_lock);
@@ -402,8 +404,8 @@ void getReadBlock(struct queue_t* pthis,struct buffer* buff)
  */
 int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
 {
-    int r;
-    size_t count = 0;
+    int ret = 0;
+    struct buffer_t buff;
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     printk_debug("Queue read\n");
 
@@ -412,35 +414,38 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
         // trigger something
         return 0;
     }
-    // wait for data
-    if (!canRead(pthis))
+    for(;;)
     {
-        if (fd->f_flags &  O_NONBLOCK)
-            return -EAGAIN;
-        //r = wait_event_interruptible_timeout(pthis->rd_queue, canRead(pthis) , 2*HZ);   // 2 seconds
-        r = wait_event_interruptible(pthis->rd_queue, canRead(pthis));
-        if (r != 0)
+        buff.size = len;
+        getReadBlock(pthis,&buff);
+        if (buff.size == 0)
         {
-            printk_debug("Queue read wait ret %d\n",r);
-            return  -ERESTARTSYS;
+            if (fd->f_flags &  O_NONBLOCK)
+            {
+                ret = -EAGAIN;
+                break;
+            }
+            ret = wait_event_interruptible(pthis->rd_queue, canRead(pthis));
+            if (ret != 0)
+            {
+                printk_debug("Queue read wait ret %d\n", ret);
+                ret =  -ERESTARTSYS;
+                break;
+            }
+        }
+        else
+        {
+            if ( copy_to_user(data,(u8*)(buff.blck)+ buff.rd_pos,buff.size) !=0 )
+            {
+                printk_debug("Queue init copy to user failed");
+                ret = 0;
+            }
+            else
+                ret = buff.size;
         }
     }
-    // check for data and go to next if it is filled
-    printk_debug("rd :%d , wr :%d \n", pthis->rd_pos, pthis->current_block->user_.wr_pos_);
-
-    if (pthis->rd_pos < pthis->current_block->user_.wr_pos_)
-    {
-        count = pthis->current_block->user_.wr_pos_ - pthis->rd_pos;
-        if (count > len)
-            count = len;
-        if ( copy_to_user(data,(u8*)(pthis->current_block)+ pthis->rd_pos,count) !=0 )
-        {
-            printk_debug("Queue init copy to user failed");
-            return 0;
-        }
-        pthis->rd_pos += count;
-    }
-    return count;
+    releaseBlock(buff.blck);
+    return ret;
 }
 /*
  * Kernel will call this function twice

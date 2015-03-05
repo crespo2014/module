@@ -37,8 +37,7 @@ module:
 	echo `uname -r`
 	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
 
-test : queue.h	
-test: main.cpp ../cpp-lib/posix/File.cpp
+test: mtest/queue.cpp ../cpp-lib/posix/File.cpp queue.h
 	g++ -g -o test -lpthread --std=c++11 $^
 	
 
@@ -46,4 +45,4 @@ tsc_test: tsc_test.cpp ../cpp-lib/posix/File.cpp
 	g++ -g -o tsc_test --std=c++11 $^
 		
 clean:
-	rm -f *.ko *.mod.* *.order *.o
+	rm -f *.ko *.mod.* *.order *.o test
