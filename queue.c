@@ -402,6 +402,8 @@ void getReadBlock(struct queue_t* pthis,struct buffer_t* buff)
         buff->rd_pos = pthis->rd_pos;
         pthis->rd_pos += buff->size;
     }
+    else
+        buff->size = 0;
     spin_unlock(&pthis->rd_lock);
 }
 
@@ -416,47 +418,45 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     printk_debug("Queue read %d \n",len);
 
-    if (data == NULL)
+    if ((data == NULL) || (len == 0))
     {
         // trigger something
         return 0;
     }
-    do
+    buff.size = len;
+    getReadBlock(pthis, &buff);  // get block to read
+    if (buff.size == 0)
     {
+        // check no blocking mode
+        if (fd->f_flags & O_NONBLOCK)
+        {
+            ret = -EAGAIN;
+        }
+        // wait for data
+        /*
+        TODO. read operation must not return if there is not data , then wait event must sucessfully peek data to send to user.
+        Also modification of buffer.size is not allowed because the function will be called many times.
+        */
+        ret = wait_event_interruptible(pthis->rd_queue, canRead_lock(pthis)); //never end we can use get read block, do not update size, return true
+        if (ret != 0)
+        {
+            printk_debug("Queue read wait ret %d\n", ret);
+            ret = -ERESTARTSYS;
+        }
+        // try now
         buff.size = len;
-        getReadBlock(pthis,&buff);  // get block to read
-        if (buff.size == 0)
+        getReadBlock(pthis, &buff);
+    }
+    if (buff.size != 0)
+    {
+        if (copy_to_user(data, (u8*) (buff.blck) + buff.rd_pos, buff.size) != 0)
         {
-            // check no blocking mode
-            if (fd->f_flags &  O_NONBLOCK)
-            {
-                ret = -EAGAIN;
-                break;
-            }
-            // wait for data
-            ret = wait_event_interruptible(pthis->rd_queue, false);
-            if (ret != 0)
-            {
-                printk_debug("Queue read wait ret %d\n", ret);
-                ret =  -ERESTARTSYS;
-                break;
-            }
-            // try now
-            buff.size = len;
-            getReadBlock(pthis,&buff);
+            printk_debug("Queue init copy to user failed");
+            ret = 0;
         }
-        if (buff.size != 0)
-        {
-            if ( copy_to_user(data,(u8*)(buff.blck)+ buff.rd_pos,buff.size) !=0 )
-            {
-                printk_debug("Queue init copy to user failed");
-                ret = 0;
-            }
-            else
-                ret = buff.size;
-            break;
-        }
-    } while(0);
+        else
+            ret = buff.size;
+    }
     releaseBlock(buff.blck);
     return ret;
 }
