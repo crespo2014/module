@@ -348,7 +348,7 @@ void lockBlock(struct blck_header_krn_t* blck)
  * This function has to be used inside spin lock that also coverage block lock and release
  * it checks if there is data that can be rea from buffer and jump to next block if it is necessary
  */
-bool canRead(struct queue_t* pthis)
+bool canRead_no_lock(struct queue_t* pthis)
 {
     __u8 next = 0;
     // todo use a spinlock
@@ -375,6 +375,15 @@ bool canRead(struct queue_t* pthis)
     return (pthis->rd_pos < pthis->current_block->user_.wr_pos_);
 }
 
+bool canRead_lock(struct queue_t* pthis)
+{
+    bool b;
+    spin_lock(&pthis->rd_lock);
+    b = canRead_no_lock(pthis);
+    spin_unlock(&pthis->rd_lock);
+    return b;
+}
+
 /**
  * Get a read block form buffer using spinlock
  * Block can have reference counter to avoid been release
@@ -383,17 +392,15 @@ void getReadBlock(struct queue_t* pthis,struct buffer_t* buff)
 {
     unsigned count = 0;
     spin_lock(&pthis->rd_lock);
-    if (canRead(pthis))
+    if (canRead_no_lock(pthis))
     {
         lockBlock(pthis->current_block);
         count = pthis->current_block->user_.wr_pos_  - pthis->rd_pos;
-        if (count > buff->size)
-            count = buff->size;
-        else
+        if (count < buff->size)
             buff->size = count;
         buff->blck = pthis->current_block;
         buff->rd_pos = pthis->rd_pos;
-        pthis->rd_pos += count;
+        pthis->rd_pos += buff->size;
     }
     spin_unlock(&pthis->rd_lock);
 }
@@ -407,33 +414,38 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
     int ret = 0;
     struct buffer_t buff;
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
-    printk_debug("Queue read\n");
+    printk_debug("Queue read %d \n",len);
 
     if (data == NULL)
     {
         // trigger something
         return 0;
     }
-    for(;;)
+    do
     {
         buff.size = len;
-        getReadBlock(pthis,&buff);
+        getReadBlock(pthis,&buff);  // get block to read
         if (buff.size == 0)
         {
+            // check no blocking mode
             if (fd->f_flags &  O_NONBLOCK)
             {
                 ret = -EAGAIN;
                 break;
             }
-            ret = wait_event_interruptible(pthis->rd_queue, canRead(pthis));
+            // wait for data
+            ret = wait_event_interruptible(pthis->rd_queue, false);
             if (ret != 0)
             {
                 printk_debug("Queue read wait ret %d\n", ret);
                 ret =  -ERESTARTSYS;
                 break;
             }
+            // try now
+            buff.size = len;
+            getReadBlock(pthis,&buff);
         }
-        else
+        if (buff.size != 0)
         {
             if ( copy_to_user(data,(u8*)(buff.blck)+ buff.rd_pos,buff.size) !=0 )
             {
@@ -442,8 +454,9 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
             }
             else
                 ret = buff.size;
+            break;
         }
-    }
+    } while(0);
     releaseBlock(buff.blck);
     return ret;
 }
@@ -457,16 +470,13 @@ unsigned int queue_poll(struct file *fd, struct poll_table_struct *pwait)
     unsigned int mask=0;
     struct queue_t* pthis = (struct queue_t*)fd->private_data;
     poll_wait(fd,&pthis->rd_queue,pwait);
-    spin_lock(&pthis->rd_lock);
-    if (canRead(pthis))
+    if (canRead_lock(pthis))
     {
         printk_debug("Queue poll can read\n");
         mask |= (POLLIN | POLLRDNORM);
     }
     else
         printk_debug("Queue poll not data to read \n");
-    spin_unlock(&pthis->rd_lock);
-
     return mask;
 }
 
