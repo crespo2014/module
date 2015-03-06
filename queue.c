@@ -116,7 +116,7 @@ void init_block_headers(struct queue_t* pthis)
     {
         pheader = (struct blck_header_krn_t*)pthis->pages[idx];
         pheader->user_.status = blck_free;
-        atomic_set(&pheader->refcount,0);
+        atomic_set(&pheader->refcount,1);
         idx += pthis->page_step;
     }
     pthis->current_page = 0;
@@ -351,7 +351,6 @@ void lockBlock(struct blck_header_krn_t* blck)
 bool canRead_no_lock(struct queue_t* pthis)
 {
     __u8 next = 0;
-    // todo use a spinlock
 
     // move to next block if necessary
     if ((pthis->rd_pos == pthis->current_block->user_.wr_pos_) && (pthis->current_block->user_.status == blck_wrote))
@@ -388,11 +387,13 @@ bool canRead_lock(struct queue_t* pthis)
  * Get a read block form buffer using spinlock
  * Block can have reference counter to avoid been release
  */
-void getReadBlock(struct queue_t* pthis,struct buffer_t* buff)
+bool getReadBlock(struct queue_t* pthis,struct buffer_t* buff)
 {
+    bool b;
     unsigned count = 0;
     spin_lock(&pthis->rd_lock);
-    if (canRead_no_lock(pthis))
+    b = canRead_no_lock(pthis);
+    if (b)
     {
         lockBlock(pthis->current_block);
         count = pthis->current_block->user_.wr_pos_  - pthis->rd_pos;
@@ -402,9 +403,8 @@ void getReadBlock(struct queue_t* pthis,struct buffer_t* buff)
         buff->rd_pos = pthis->rd_pos;
         pthis->rd_pos += buff->size;
     }
-    else
-        buff->size = 0;
     spin_unlock(&pthis->rd_lock);
+    return b;
 }
 
 /*
@@ -424,40 +424,31 @@ int device_read(struct file *fd, char __user *data, size_t len, loff_t *offset)
         return 0;
     }
     buff.size = len;
-    getReadBlock(pthis, &buff);  // get block to read
-    if (buff.size == 0)
+    if (!getReadBlock(pthis, &buff))  // get block to read
     {
-        // check no blocking mode
         if (fd->f_flags & O_NONBLOCK)
         {
             ret = -EAGAIN;
         }
-        // wait for data
-        /*
-        TODO. read operation must not return if there is not data , then wait event must sucessfully peek data to send to user.
-        Also modification of buffer.size is not allowed because the function will be called many times.
-        */
-        ret = wait_event_interruptible(pthis->rd_queue, canRead_lock(pthis)); //never end we can use get read block, do not update size, return true
+        ret = wait_event_interruptible(pthis->rd_queue, getReadBlock(pthis, &buff)); //never end we can use get read block, do not update size, return true
         if (ret != 0)
         {
+            buff.size = 0;
             printk_debug("Queue read wait ret %d\n", ret);
             ret = -ERESTARTSYS;
         }
-        // try now
-        buff.size = len;
-        getReadBlock(pthis, &buff);
     }
     if (buff.size != 0)
     {
-        if (copy_to_user(data, (u8*) (buff.blck) + buff.rd_pos, buff.size) != 0)
+        if (copy_to_user(data, ((u8*) (buff.blck)) + buff.rd_pos, buff.size) != 0)
         {
             printk_debug("Queue init copy to user failed");
             ret = 0;
         }
         else
             ret = buff.size;
+        releaseBlock(buff.blck);        // this block has been lock by getReadBlock
     }
-    releaseBlock(buff.blck);
     return ret;
 }
 /*
