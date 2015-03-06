@@ -9,7 +9,6 @@
 #include <vector>
 #include <atomic>
 
-
 #include <stdint.h>
 #include <iostream>
 #include <sys/mman.h>
@@ -18,115 +17,132 @@
 #include "../queue.h"
 #include "linux/types.h"
 
+#include "CppUTest/TestHarness.h"
+#include "CppUTestExt/MockSupport.h"
+
+TEST_GROUP(QueueModule)
+{
+    void setup()
+    {
+
+    }
+    void teardown()
+    {
+
+    }
+};
 
 std::atomic<bool> readLock;
+std::atomic<unsigned> readcount { 0 };
 
 /**
  * A thread function that read 10 times 5 bytes
  */
-void doRead(POSIX::File* f)
+static void doRead(POSIX::File* f)
 {
-    while (readLock) {};
+    while (readLock)
+    {
+    };
     char buff[5];
     unsigned i = 10;
-    while(i--)
-        f->read(buff,5);
+    while (i--)
+    {
+        readcount += (f->read(buff, 5));
+
+    }
 }
 
-
-int main()
+TEST(QueueModule, fullTest)
 {
+
     std::cout.setf(std::ios_base::unitbuf);
     try
     {
-    POSIX::File f("/dev/queue", O_RDWR /*| O_NONBLOCK*/);
-    queue_info_ nfo;
-    nfo.block_size = 1024;
-    nfo.block_count = 4;
-    f.ioctl(QUEUE_INIT,&nfo);
-    uint8_t* p = (uint8_t*)f.mmap(nullptr,nfo.block_count*nfo.block_size,PROT_READ | PROT_WRITE,MAP_SHARED);
-    struct block_hdr_t* block[4];
-    for(int i=0;i<4;++i)
-    {
-        block[i] = reinterpret_cast<struct block_hdr_t*>(p+i*nfo.block_size);
-    }
-    block[0]->wr_pos_ = nfo.block_start_offset;
-    block[0]->status = blck_writting;
-    char* pd = reinterpret_cast<char*>(block[0]);
+        POSIX::File f("/dev/queue", O_RDWR /*| O_NONBLOCK*/);
+        queue_info_ nfo;
+        nfo.block_size = 1024;
+        nfo.block_count = 4;
+        f.ioctl(QUEUE_INIT, &nfo);
+        uint8_t* p = (uint8_t*) f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
+        struct block_hdr_t* block[4];
+        for (int i = 0; i < 4; ++i)
+        {
+            block[i] = reinterpret_cast<struct block_hdr_t*>(p + i * nfo.block_size);
+        }
+        block[0]->wr_pos_ = nfo.block_start_offset;
+        block[0]->status = blck_writting;
+        //char* pd = reinterpret_cast<char*>(block[0]);
 
-    block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"user level app written data");
-    // read from the file
-    char b[1000];
-    std::cout << "1";
-    auto s = f.read(b,sizeof(b),std::nothrow);
-    std::cout << "1";
+        block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "1234567890123");
+        // read from the file
+        char b[1000];
 
-    std::thread th([&]()
-    {
-        std::cout << "2";
-        std::this_thread::sleep_for(std::chrono::seconds(5));
-        block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
-        f.write(nullptr,0);
-        std::cout << "2";
-    });
+        CHECK(f.read(b, sizeof(b), std::nothrow) == 13);
 
-    // blocking read to be release in 5 seconds
-    s = f.read(b,sizeof(b),std::nothrow);
-    th.join();
-    std::cout << "1";
+        std::thread th([&]()
+        {
 
-    block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"more data");
-    s = f.read(b,sizeof(b),std::nothrow);
-    std::cout << "1";
+            std::this_thread::sleep_for(std::chrono::seconds(5));
+            block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"12345");
+            f.write(nullptr,0);
 
-    //Pool for incoming data
-    short events;
-    bool br;
-    br = f.poll(POLLIN,events,3000,std::nothrow);
-    block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
-    br = f.poll(POLLIN,events,3000,std::nothrow);
-    s = f.read(b,200,std::nothrow);
-    std::cout << "1";
+        });
 
-    std::thread th1([&]()
-    {
-        std::cout << "2";
-        std::this_thread::sleep_for(std::chrono::seconds(2));
-        block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"from thread");
-        f.write(nullptr,0);
-    });
-    br = f.poll(POLLIN,events,4000,std::nothrow);
-    s = f.read(b,200,std::nothrow);
-    std::cout << "1";
-    th1.join();
-    //jump from one buffer to another
+        // blocking read to be release in 5 seconds
+        CHECK(f.read(b, sizeof(b), std::nothrow) == 5);
+        th.join();
 
-    //define read timeout
+        block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "1234");
+        CHECK(f.read(b, sizeof(b), std::nothrow) == 4);
 
-    // do multithread reading and check that all bytes has been read
-    readLock.store(true);
-    std::vector<std::thread> threads;
-    threads.emplace_back(doRead,&f);        // read 10 x 5 = 50
-    threads.emplace_back(doRead,&f);
-    threads.emplace_back(doRead,&f);
-    threads.emplace_back(doRead,&f);
-    block[0]->wr_pos_ += 200;
-    usleep(100);
-    readLock.store(false);
-    for( auto& t : threads)
-    {
-        t.join();
-    }
-    // all data has to be conssumed
-    br = f.poll(POLLIN,events,0,std::nothrow); // to be false
+        //Pool for incoming data
+        short events;
+        bool br;
+        br = f.poll(POLLIN, events, 3000, std::nothrow);
+        block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "123");
+        CHECK_TRUE(f.poll(POLLIN, events, 3000, std::nothrow) == 1);
+        CHECK(f.read(b, 200, std::nothrow) == 3);
 
-    ::munmap(p,nfo.block_count*nfo.block_size);
-    //s = f.read(nullptr,200,std::nothrow);
+        std::thread th1([&]()
+        {
+            std::this_thread::sleep_for(std::chrono::seconds(2));
+            block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"12345678");
+            f.write(nullptr,0);
+        });
+        br = f.poll(POLLIN, events, 4000, std::nothrow);
+        CHECK(f.read(b, 200, std::nothrow) == 8);
+        th1.join();
+        //jump from one buffer to another
+        block[0]->status = blck_wrote;
+        br = f.poll(POLLIN, events, 4000, std::nothrow);
 
+        block[1]->wr_pos_ = nfo.block_start_offset;
+        block[1]->status = blck_writting;
+
+        //define read timeout
+
+        // do multithread reading and check that all bytes has been read
+        readLock.store(true);
+        std::vector<std::thread> threads;
+        threads.emplace_back(doRead, &f);        // read 10 x 5 = 50
+        threads.emplace_back(doRead, &f);
+        threads.emplace_back(doRead, &f);
+        threads.emplace_back(doRead, &f);
+        block[0]->wr_pos_ += 200;
+        usleep(100);
+        readLock.store(false);
+        for (auto& t : threads)
+        {
+            t.join();
+        }
+        // all data has to be conssumed
+        br = f.poll(POLLIN, events, 0, std::nothrow); // to be false
+
+        ::munmap(p, nfo.block_count * nfo.block_size);
+        //s = f.read(nullptr,200,std::nothrow);
 
     } catch (const std::exception& e)
     {
-        std::cout << e.what() << std::endl;
+        FAIL(e.what());
     }
-    return 0;
 }

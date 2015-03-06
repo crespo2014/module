@@ -34,7 +34,7 @@ struct queue_info_
 {
     volatile __u32 block_size;  /// user set max size and read back current size
     volatile __u32 block_count; /// user set how many block to allocate
-    volatile __u32 block_start_offset;  //space need by kernel
+    volatile __u16 block_start_offset;  //space need by kernel
 };
 
 /*
