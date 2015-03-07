@@ -234,6 +234,7 @@ $(addsuffix /,$(addprefix $(build_dir)/,$(src_dirs))) : | $(build_dir)
 # /etc/ld.so.conf.d/ add libgcc.conf file with line /lib/i386-linux-gnu/
 # run ldconfig
 
+test : $(targets)
 
 clean:
 	rm -rf $(build_dir)

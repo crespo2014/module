@@ -14,6 +14,7 @@
 #include <sys/mman.h>
 
 #include "../../cpp-lib/posix/File.h"
+#include "../../cpp-lib/posix/tcp_socket.h"
 #include "../queue.h"
 #include "linux/types.h"
 
@@ -50,6 +51,22 @@ static void doRead(POSIX::File* f)
         readcount += (f->read(buff, 5));
 
     }
+}
+
+/**
+ * read incoming data until n
+ */
+static void doTcpServer(tcpSock* sock)
+{
+    char b[50];
+    do
+    {
+        tcpSock client = sock->accept();
+        if (client)
+        {
+            client.read(b,sizeof(b));
+        }
+    } while (*sock);
 }
 
 TEST(QueueModule, fullTest)
@@ -137,6 +154,22 @@ TEST(QueueModule, fullTest)
         }
         // all data has to be conssumed
         CHECK_FALSE(f.poll(POLLIN, events, 0, std::nothrow)); // to be false
+
+        // start a tcp server to provide data
+        tcpSock sock(std::nothrow);
+        CHECK_TRUE(sock);
+        CHECK_TRUE(sock.setupServer(2000,std::nothrow));
+        std::thread srv(doTcpServer,&sock);
+
+        tcpSock sock_clt("127.0.0.1",2000,std::nothrow);
+        CHECK_TRUE(sock_clt);
+
+        //start tcp client to connect and do splice
+        block[0]->wr_pos_ += 200;
+
+        CHECK_TRUE(sock_clt.close(std::nothrow));
+        CHECK_TRUE(sock.close(std::nothrow));
+
 
         ::munmap(p, nfo.block_count * nfo.block_size);
         //s = f.read(nullptr,200,std::nothrow);
