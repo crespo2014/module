@@ -38,7 +38,6 @@ module:
 	make -C /usr/src/linux-headers-`uname -r` M=$(CURDIR) ${options}  modules
 
 
-
 # targets define different output targets.
 # <target_name>_src_dir define directory containing all file for target
 # <target_name>_src     define cpp and c files for target
@@ -59,11 +58,16 @@ targets := queue_mtest
 
 common_cpp := --std=c++11 -Wall
 common_ld := -lpthread
+common_cpp += -finput-charset=ascii -Wall -Wextra -pedantic -Wmissing-declarations -Wpointer-arith -Wwrite-strings -Wformat=2 -Wlogical-op -Wcast-align -Wcast-qual -Wundef -Wmissing-include-dirs -Wfloat-equal -Wconversion
+
 
 queue_mtest_src_dir := mtest
 queue_mtest_src := cpp-lib/posix/File.cpp
-queue_mtest_cpp := -I../cpputest/include  
+queue_mtest_cpp := -I../cpputest/include
+queue_mtest_cpp += -include ../cpputest/include/CppUTest/MemoryLeakDetectorNewMacros.h
+queue_mtest_cpp += -include ../cpputest/include/CppUTest/MemoryLeakDetectorMallocMacros.h
 queue_mtest_ld := -Wl,-Bstatic -lCppUTest -Wl,-Bstatic -lCppUTestExt -Wl,-Bdynamic -lgcc_s  -L../cpputest/lib
+
 
 #Look for all cpp files in a folder and return as build/%.o
 find-cpp-o =  $(addprefix $(build_dir)/,$(patsubst %.cpp,%.o,$(foreach d,$(1),$(wildcard $(d)/*.cpp))))
@@ -176,7 +180,7 @@ endef
 _FLAGS := -O3 -g -DNDEBUG
 
 # Compile with flags to include info that can be used with valgrind or gdb.
-_FLAGS.debug := -g -DCOB_LOG_LEVEL=$(COB_LOG_LEVEL) -D_DEBUG
+_FLAGS.debug := -g -D_DEBUG
 
 # Compile with flags to include info that can be used with gcov (code coverage analysis)
 _FLAGS.coverage := -O0 -g -fprofile-arcs -ftest-coverage --coverage
@@ -229,18 +233,6 @@ $(addsuffix /,$(addprefix $(build_dir)/,$(src_dirs))) : | $(build_dir)
 # include libgcc_s in path 
 # /etc/ld.so.conf.d/ add libgcc.conf file with line /lib/i386-linux-gnu/
 # run ldconfig
-
-#CPPFLAGS += -finput-charset=ascii -Wall -Wextra -pedantic -Wmissing-declarations -Wpointer-arith -Wwrite-strings -Wformat=2 -Wlogical-op -Wcast-align -Wcast-qual -Wundef -Wmissing-include-dirs -Wfloat-equal -Wconversion
-CPPFLAGS += --std=c++11 -Wall
-CPPFLAGS += -I../cpputest/include 
-#CPPFLAGS += -DMTEST_BUILD -DCPPUTEST_USE_MEM_LEAK_DETECTION=1
-#CPPFLAGS += -include ../cpputest/include/CppUTest/MemoryLeakDetectorNewMacros.h
-#CPPFLAGS += -include ../cpputest/include/CppUTest/MemoryLeakDetectorMallocMacros.h
-LDFLAGS += -Wl,-Bstatic -lCppUTest -Wl,-Bstatic -lCppUTestExt -Wl,-Bdynamic -lgcc_s
-#LDFLAGS += -lCppUTest -lCppUTestExt -lgcc_s
-LDFLAGS += -L../cpputest/lib
-LDFLAGS += -lpthread  
-
 
 
 clean:
