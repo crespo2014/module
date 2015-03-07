@@ -97,8 +97,8 @@ TEST(QueueModule, fullTest)
 
         //Pool for incoming data
         short events;
-        bool br;
-        br = f.poll(POLLIN, events, 3000, std::nothrow);
+        //bool br;
+        CHECK_FALSE(f.poll(POLLIN, events, 3000, std::nothrow));
         block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "123");
         CHECK_TRUE(f.poll(POLLIN, events, 3000, std::nothrow) == 1);
         CHECK(f.read(b, 200, std::nothrow) == 3);
@@ -109,12 +109,12 @@ TEST(QueueModule, fullTest)
             block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"12345678");
             f.write(nullptr,0);
         });
-        br = f.poll(POLLIN, events, 4000, std::nothrow);
+        CHECK_TRUE(f.poll(POLLIN, events, 4000, std::nothrow));
         CHECK(f.read(b, 200, std::nothrow) == 8);
         th1.join();
         //jump from one buffer to another
         block[0]->status = blck_wrote;
-        br = f.poll(POLLIN, events, 4000, std::nothrow);
+        CHECK_FALSE(f.poll(POLLIN, events, 4000, std::nothrow));
 
         block[1]->wr_pos_ = nfo.block_start_offset;
         block[1]->status = blck_writting;
@@ -136,7 +136,7 @@ TEST(QueueModule, fullTest)
             t.join();
         }
         // all data has to be conssumed
-        br = f.poll(POLLIN, events, 0, std::nothrow); // to be false
+        CHECK_FALSE(f.poll(POLLIN, events, 0, std::nothrow)); // to be false
 
         ::munmap(p, nfo.block_count * nfo.block_size);
         //s = f.read(nullptr,200,std::nothrow);
