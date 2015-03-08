@@ -63,7 +63,7 @@ static void doTcpServer(tcpSock* sock)
 {
     do
     {
-        tcpSock client = sock->accept();
+        tcpSock client = sock->accept(std::nothrow);
         read_pos = 0;
         while (client)
         {
@@ -168,7 +168,7 @@ TEST(QueueModule, fullTest)
         CHECK_TRUE(sock.setupServer(2000,std::nothrow));
         std::thread srv(doTcpServer,&sock);
 
-        tcpSock sock_clt("127.0.0.1",2000,std::nothrow);
+        tcpSock sock_clt("192.168.0.1",2000,std::nothrow);
         CHECK_TRUE(sock_clt);
 
         //start tcp client to connect and do splice
@@ -180,6 +180,7 @@ TEST(QueueModule, fullTest)
         CHECK(splice(f.getfd(),nullptr,sock_clt.Getfd(),nullptr,50,0) == 50);
         sock_clt.shutdown(true,true);
         CHECK(read_pos == 50);
+        srv.join();
 
 
         CHECK_TRUE(sock_clt.close(std::nothrow));

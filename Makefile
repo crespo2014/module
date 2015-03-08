@@ -109,7 +109,7 @@ endef
 # 2 - suffix
 define target-rule 
 
-$(build_dir)/$(1)_$(2) : $(addsuffix .$(1).$(2),$(call find-o,$($(1)_src_dir)) $(call get-o,$($(1)_src)))
+$(build_dir)/$(1)_$(2) : $(addsuffix .$(1)_$(2),$(call find-o,$($(1)_src_dir)) $(call get-o,$($(1)_src)))
 	$(Q)echo "$$(@F)"
 	$(Q)$(CXX) -o $$@ $$^ $(common_ld) $($(1)_ld)  $($(2)_ld)
 	
@@ -124,7 +124,7 @@ endef
 # 1 - target name	
 define main-target-rule
 
-$(build_dir)/$(1).dbg : $(addsuffix .$(1),$(call find-o,$($(1)_src_dir)) $(call get-o,$($(1)_src))) 
+$(build_dir)/$(1).dbg : $(addsuffix .$(1)_,$(call find-o,$($(1)_src_dir)) $(call get-o,$($(1)_src))) 
 #	$(Q)echo "$$(@F)"
 	$(Q)$(CXX) -o $$@ $$^ $(common_ld) $($(1)_ld) 
 
@@ -145,15 +145,15 @@ endef
 # 3 - suffix
 define cpp-file-target-rule
 
-$(build_dir)/$(1:%.cpp=%.o).$(2)$(3): $(1) |  $(dir $(build_dir)/$(1))
+$(build_dir)/$(1:%.cpp=%.o).$(2)_$(3): $(1) |  $(dir $(build_dir)/$(1))
  
 #	$(Q)echo "$(build_dir)/$(1).$(2)$(3).d"
-	$(Q)$(CXX) -MM $($(3)_cpp) $(common_cpp) $($(2)_cpp) -MT "$(build_dir)/$(1:%.cpp=%.o).$(2)$(3)" -MMD -MP -MF "$(build_dir)/$(1).$(2)$(3).d"  $(1)
+	$(Q)$(CXX) -MM $($(3)_cpp) $(common_cpp) $($(2)_cpp) -MT "$(build_dir)/$(1:%.cpp=%.o).$(2)_$(3)" -MMD -MP -MF "$(build_dir)/$(1).$(2)_$(3).d"  $(1)
 	
 	$(Q)echo "$$(@F)"
 	$(Q)$(CXX) -c $($(3)_cpp) $(common_cpp) $($(2)_cpp) -o $$@  $(1)
 
--include $(build_dir)/$(1).$(2)$(3).d
+-include $(build_dir)/$(1).$(2)_s$(3).d
 
 endef
 
@@ -164,15 +164,15 @@ endef
 # 3 - suffix
 define c-file-target-rule 
 
-$(build_dir)/$(1:%.c=%.o).$(2)$(3): $(1)  |  $(dir $(build_dir)/$(1))
+$(build_dir)/$(1:%.c=%.o).$(2)_$(3): $(1)  |  $(dir $(build_dir)/$(1))
 
 #	$(Q)echo "$(build_dir)/$(1).$(2)$(3).d"
-	$(Q)$(CC) -MM $($(3)_cpp) $(common_cpp) $($(2)_cpp) -MT "$(build_dir)/$(1:%.c=%.o).$(2)$(3)" -MMD -MP -MF "$(build_dir)/$(1).$(2)$(3).d"  $(1)
+	$(Q)$(CC) -MM $($(3)_cpp) $(common_cpp) $($(2)_cpp) -MT "$(build_dir)/$(1:%.c=%.o).$(2)_$(3)" -MMD -MP -MF "$(build_dir)/$(1).$(2)_$(3).d"  $(1)
 	
 	$(Q)echo "$$(@F)"
 	$(Q)$(CC) -c  $($(3)_cpp) $(common_cpp) $($(2)_cpp)  -o $$@  $(1)
 
--include $(build_dir)/$(1).$(2)$(3).d
+-include $(build_dir)/$(1).$(2)_$(3).d
 
 endef
 
@@ -214,8 +214,8 @@ $(foreach t,$(targets), $(foreach f,$(c_files), $(eval $(call c-file-target-rule
 
 #defining extra target using as debug clang, etc
 $(foreach t,$(targets),$(foreach s,$(all_suffix),$(eval $(call target-rule ,$(t),$(s)))))
-$(foreach t,$(targets),$(foreach f,$(cpp_files) ,$(foreach s,$(all_suffix) ,$(eval $(call cpp-file-target-rule ,$(f),$(t),.$(s))))))
-$(foreach t,$(targets),$(foreach f,$(c_files)   ,$(foreach s,$(all_suffix) ,$(eval $(call c-file-target-rule   ,$(f),$(t),.$(s))))))
+$(foreach t,$(targets),$(foreach f,$(cpp_files) ,$(foreach s,$(all_suffix) ,$(eval $(call cpp-file-target-rule ,$(f),$(t),$(s))))))
+$(foreach t,$(targets),$(foreach f,$(c_files)   ,$(foreach s,$(all_suffix) ,$(eval $(call c-file-target-rule   ,$(f),$(t),$(s))))))
 
 # all targets depends on directory
 $(addprefix $(build_dir)/,$(targets)): | $(@D)
