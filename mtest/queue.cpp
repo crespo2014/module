@@ -17,6 +17,7 @@
 #include "../../cpp-lib/posix/tcp_socket.h"
 #include "../queue.h"
 #include "linux/types.h"
+#include <sys/sendfile.h>
 
 #include "CppUTest/TestHarness.h"
 #include "CppUTestExt/MockSupport.h"
@@ -53,18 +54,20 @@ static void doRead(POSIX::File* f)
     }
 }
 
+char read_data[100];
+char read_pos;
 /**
  * read incoming data until n
  */
 static void doTcpServer(tcpSock* sock)
 {
-    char b[50];
     do
     {
         tcpSock client = sock->accept();
-        if (client)
+        read_pos = 0;
+        while (client)
         {
-            client.read(b,sizeof(b));
+            read_pos += client.read(read_data + read_pos,sizeof(read_data) - read_pos);
         }
     } while (*sock);
 }
@@ -81,16 +84,17 @@ TEST(QueueModule, fullTest)
         nfo.block_count = 4;
         f.ioctl(QUEUE_INIT, &nfo);
         uint8_t* p = (uint8_t*) f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
-        struct block_hdr_t* block[4];
-        for (int i = 0; i < 4; ++i)
-        {
-            block[i] = reinterpret_cast<struct block_hdr_t*>(p + i * nfo.block_size);
-        }
-        block[0]->wr_pos_ = nfo.block_start_offset;
-        block[0]->status = blck_writting;
-        //char* pd = reinterpret_cast<char*>(block[0]);
+//        struct block_hdr_t* block[4];
+//        for (int i = 0; i < 4; ++i)
+//        {
+//            block[i] = reinterpret_cast<struct block_hdr_t*>(p + i * nfo.block_size);
+//        }
+        struct block_hdr_t * pblock = reinterpret_cast<struct block_hdr_t*>(p + 0 * nfo.block_size);
 
-        block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "1234567890123");
+        pblock->wr_pos_ = nfo.block_start_offset;
+        pblock->status = blck_writting;
+
+        pblock->wr_pos_ += sprintf((char*) pblock + pblock->wr_pos_, "1234567890123");
         // read from the file
         char b[1000];
 
@@ -100,7 +104,7 @@ TEST(QueueModule, fullTest)
         {
 
             std::this_thread::sleep_for(std::chrono::seconds(5));
-            block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"12345");
+            pblock->wr_pos_ += sprintf((char*)pblock + pblock->wr_pos_,"12345");
             f.write(nullptr,0);
 
         });
@@ -109,32 +113,35 @@ TEST(QueueModule, fullTest)
         CHECK(f.read(b, sizeof(b), std::nothrow) == 5);
         th.join();
 
-        block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "1234");
+        pblock->wr_pos_ += sprintf((char*) pblock + pblock->wr_pos_, "1234");
         CHECK(f.read(b, sizeof(b), std::nothrow) == 4);
 
         //Pool for incoming data
         short events;
         //bool br;
         CHECK_FALSE(f.poll(POLLIN, events, 3000, std::nothrow));
-        block[0]->wr_pos_ += sprintf((char*) block[0] + block[0]->wr_pos_, "123");
+        pblock->wr_pos_ += sprintf((char*) pblock + pblock->wr_pos_, "123");
         CHECK_TRUE(f.poll(POLLIN, events, 3000, std::nothrow) == 1);
         CHECK(f.read(b, 200, std::nothrow) == 3);
 
         std::thread th1([&]()
         {
             std::this_thread::sleep_for(std::chrono::seconds(2));
-            block[0]->wr_pos_ += sprintf((char*)block[0] + block[0]->wr_pos_,"12345678");
+            pblock->wr_pos_ += sprintf((char*)pblock + pblock->wr_pos_,"12345678");
             f.write(nullptr,0);
         });
         CHECK_TRUE(f.poll(POLLIN, events, 4000, std::nothrow));
         CHECK(f.read(b, 200, std::nothrow) == 8);
         th1.join();
+
         //jump from one buffer to another
-        block[0]->status = blck_wrote;
+        pblock->status = blck_wrote;
         CHECK_FALSE(f.poll(POLLIN, events, 4000, std::nothrow));
 
-        block[1]->wr_pos_ = nfo.block_start_offset;
-        block[1]->status = blck_writting;
+        pblock = reinterpret_cast<struct block_hdr_t*>(p + 1 * nfo.block_size);
+
+        pblock->wr_pos_ = nfo.block_start_offset;
+        pblock->status = blck_writting;
 
         //define read timeout
 
@@ -145,7 +152,7 @@ TEST(QueueModule, fullTest)
         threads.emplace_back(doRead, &f);
         threads.emplace_back(doRead, &f);
         threads.emplace_back(doRead, &f);
-        block[0]->wr_pos_ += 200;
+        pblock->wr_pos_ += 200;
         usleep(100);
         readLock.store(false);
         for (auto& t : threads)
@@ -165,7 +172,15 @@ TEST(QueueModule, fullTest)
         CHECK_TRUE(sock_clt);
 
         //start tcp client to connect and do splice
-        block[0]->wr_pos_ += 200;
+        pblock->wr_pos_ += 50;
+
+        CHECK(::sendfile(sock_clt.Getfd(),f.getfd(),0,50) == 50);
+
+        pblock->wr_pos_ += 50;
+        CHECK(splice(f.getfd(),nullptr,sock_clt.Getfd(),nullptr,50,0) == 50);
+        sock_clt.shutdown(true,true);
+        CHECK(read_pos == 50);
+
 
         CHECK_TRUE(sock_clt.close(std::nothrow));
         CHECK_TRUE(sock.close(std::nothrow));

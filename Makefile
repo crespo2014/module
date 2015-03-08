@@ -177,18 +177,18 @@ $(build_dir)/$(1:%.c=%.o).$(2)$(3): $(1)  |  $(dir $(build_dir)/$(1))
 endef
 
 # this flags are use for c and cpp files when building normal target
-_FLAGS := -O3 -g -DNDEBUG
+_cpp := -O3 -g -DNDEBUG
 
 # Compile with flags to include info that can be used with valgrind or gdb.
-_FLAGS.debug := -g -D_DEBUG
+debug_cpp := -g -D_DEBUG
 
 # Compile with flags to include info that can be used with gcov (code coverage analysis)
-_FLAGS.coverage := -O0 -g -fprofile-arcs -ftest-coverage --coverage
-_LDFLAGS.coverage := -fprofile-arcs
+coverage_cpp := -O0 -g -fprofile-arcs -ftest-coverage --coverage
+coverage_ld := -fprofile-arcs
 
 # Compile with flags to include AddressSanitizer (see http://code.google.com/p/address-sanitizer/)
-_FLAGS.asan := -O1 -g  -fno-omit-frame-pointer
-_CPPFLAGS.asan := -fsanitize=address
+asan_cpp := -O1 -g  -fno-omit-frame-pointer
+asan_cpp += -fsanitize=address
 
 # Compile with flags to include ThreadSanitizer (see http://code.google.com/p/data-race-test/wiki/ThreadSanitizer)
 _FLAGS.tsan := -O1 -g  -fPIE -fno-omit-frame-pointer
