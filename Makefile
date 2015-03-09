@@ -153,7 +153,7 @@ $(build_dir)/$(1:%.cpp=%.o).$(2)_$(3): $(1) |  $(dir $(build_dir)/$(1))
 	$(Q)echo "$$(@F)"
 	$(Q)$(CXX) -c $($(3)_cpp) $(common_cpp) $($(2)_cpp) -o $$@  $(1)
 
--include $(build_dir)/$(1).$(2)_s$(3).d
+-include $(build_dir)/$(1).$(2)_$(3).d
 
 endef
 

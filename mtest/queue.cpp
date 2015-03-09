@@ -166,21 +166,24 @@ TEST(QueueModule, fullTest)
         tcpSock sock(std::nothrow);
         CHECK_TRUE(sock);
         CHECK_TRUE(sock.setupServer(2000,std::nothrow));
-        std::thread srv(doTcpServer,&sock);
+        //std::thread srv(doTcpServer,&sock);
 
-        tcpSock sock_clt("192.168.0.1",2000,std::nothrow);
+        tcpSock sock_clt("192.168.0.1",80/*,std::nothrow*/);
         CHECK_TRUE(sock_clt);
 
         //start tcp client to connect and do splice
         pblock->wr_pos_ += 50;
 
-        CHECK(::sendfile(sock_clt.Getfd(),f.getfd(),0,50) == 50);
+        f.spliceTo(f.getfd(),50);
+        //f.sendFile(sock_clt.Getfd(),50);
+
+        //CHECK(::sendfile(sock_clt.Getfd(),f.getfd(),0,50) == 50);
 
         pblock->wr_pos_ += 50;
         CHECK(splice(f.getfd(),nullptr,sock_clt.Getfd(),nullptr,50,0) == 50);
         sock_clt.shutdown(true,true);
         CHECK(read_pos == 50);
-        srv.join();
+        //srv.join();
 
 
         CHECK_TRUE(sock_clt.close(std::nothrow));
