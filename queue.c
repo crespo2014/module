@@ -486,6 +486,24 @@ ssize_t queue_sendpage(struct file *fd, struct page * pg, int i1, size_t len, lo
     return 10;
 }
 
+ssize_t queue_spliceRead(struct file * fd, loff_t * ppos, struct pipe_inode_info * pipe, size_t len, unsigned int flag)
+{
+    printk_debug("Queue splice read len %u flag %d \n",len,flag);
+    return 10;
+}
+
+ssize_t queue_spliceWrite(struct pipe_inode_info * pipe, struct file * fd, loff_t * ppos, size_t len, unsigned int flag)
+{
+    printk_debug("Queue sendPage len %u flag %d \n",len,flag);
+    return 10;
+}
+
+int queue_release(struct inode * node, struct file *fd)
+{
+    printk_debug("Queue release\n");
+    return 0;
+}
+
 // file operations for misc device
 static struct file_operations fops_sys = { //
         .llseek =   queue_llseek, //
@@ -497,7 +515,9 @@ static struct file_operations fops_sys = { //
         .unlocked_ioctl = device_ioctl, //
         .release = device_close, //
         .sendpage = queue_sendpage, //
-
+        .splice_write = queue_spliceWrite, //
+        .splice_read = queue_spliceRead, //
+        //.release = queue_release, //
         };
 // misc device resgistration
 static struct miscdevice misc = { //

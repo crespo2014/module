@@ -83,7 +83,9 @@ TEST(QueueModule, fullTest)
         nfo.block_size = 1024;
         nfo.block_count = 4;
         f.ioctl(QUEUE_INIT, &nfo);
-        uint8_t* p = (uint8_t*) f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
+        auto m = f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
+
+        uint8_t* p = (uint8_t*)*m;
 //        struct block_hdr_t* block[4];
 //        for (int i = 0; i < 4; ++i)
 //        {
@@ -162,7 +164,6 @@ TEST(QueueModule, fullTest)
         // all data has to be conssumed
         CHECK_FALSE(f.poll(POLLIN, events, 0, std::nothrow)); // to be false
 
-        ::munmap(p, nfo.block_count * nfo.block_size);
         //s = f.read(nullptr,200,std::nothrow);
 
     } catch (const std::exception& e)
@@ -179,14 +180,14 @@ TEST(QueueModule, zero_copy)
         queue_info_ nfo;
         nfo.block_size = 1024;
         nfo.block_count = 4;
-        f.ioctl(QUEUE_INIT, &nfo);
-        uint8_t* p = (uint8_t*) f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
-        struct block_hdr_t * pblock = reinterpret_cast<struct block_hdr_t*>(p + 0 * nfo.block_size);
-
-        pblock->wr_pos_ = nfo.block_start_offset;
-        pblock->status = blck_writting;
-
-        pblock->wr_pos_ += sprintf((char*) pblock + pblock->wr_pos_, "1234567890123");
+//        f.ioctl(QUEUE_INIT, &nfo);
+//         auto m = f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
+//        struct block_hdr_t * pblock = reinterpret_cast<struct block_hdr_t*>(p + 0 * nfo.block_size);
+//
+//        pblock->wr_pos_ = nfo.block_start_offset;
+//        pblock->status = blck_writting;
+//
+//        pblock->wr_pos_ += sprintf((char*) pblock + pblock->wr_pos_, "1234567890123");
         // start a tcp server to provide data
         tcpSock sock(std::nothrow);
         CHECK_TRUE(sock);
@@ -197,14 +198,14 @@ TEST(QueueModule, zero_copy)
         CHECK_TRUE(sock_clt);
 
         //start tcp client to connect and do splice
-        pblock->wr_pos_ += 50;
+        //pblock->wr_pos_ += 50;
 
-        // f.spliceTo(sock_clt.getfd(),50);
+        f.spliceTo(sock_clt.getfd(),50);
         f.sendFile(sock_clt.getfd(), 50);
 
         //CHECK(::sendfile(sock_clt.Getfd(),f.getfd(),0,50) == 50);
 
-        pblock->wr_pos_ += 50;
+        //pblock->wr_pos_ += 50;
         CHECK(splice(f.getfd(), nullptr, sock_clt.getfd(), nullptr, 50, 0) == 50);
         sock_clt.shutdown(true, true);
         CHECK(read_pos == 50);
@@ -212,7 +213,7 @@ TEST(QueueModule, zero_copy)
 
         CHECK_TRUE(sock_clt.close(std::nothrow));
         CHECK_TRUE(sock.close(std::nothrow));
-        ::munmap(p, nfo.block_count * nfo.block_size);
+        //::munmap(p, nfo.block_count * nfo.block_size);
     } catch (const std::exception& e)
     {
         FAIL(e.what());
