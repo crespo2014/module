@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <iostream>
 #include <sys/mman.h>
+#include <unistd.h>
 
 #include "../../cpp-lib/posix/File.h"
 #include "../../cpp-lib/posix/tcp_socket.h"
@@ -180,6 +181,15 @@ TEST(QueueModule, zero_copy)
         queue_info_ nfo;
         nfo.block_size = 1024;
         nfo.block_count = 4;
+
+
+        int fd[2];
+        CHECK(::pipe(fd) ==0);
+
+        f.spliceTo(fd[1],50);
+
+
+
 //        f.ioctl(QUEUE_INIT, &nfo);
 //         auto m = f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
 //        struct block_hdr_t * pblock = reinterpret_cast<struct block_hdr_t*>(p + 0 * nfo.block_size);
@@ -199,6 +209,9 @@ TEST(QueueModule, zero_copy)
 
         //start tcp client to connect and do splice
         //pblock->wr_pos_ += 50;
+
+        POSIX::File out("/dev/null", O_RDWR);
+        f.spliceTo(out.getfd(),50);
 
         f.spliceTo(sock_clt.getfd(),50);
         f.sendFile(sock_clt.getfd(), 50);
