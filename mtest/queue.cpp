@@ -67,7 +67,7 @@ static void doTcpServer(tcpSock* sock)
         read_pos = 0;
         while (client)
         {
-            read_pos += client.read(read_data + read_pos,sizeof(read_data) - read_pos);
+            read_pos += client.read(read_data + read_pos, sizeof(read_data) - read_pos);
         }
     } while (*sock);
 }
@@ -147,7 +147,7 @@ TEST(QueueModule, fullTest)
 
         // do multithread reading and check that all bytes has been read
         readLock.store(true);
-        std::vector<std::thread> threads;
+        std::vector < std::thread > threads;
         threads.emplace_back(doRead, &f);        // read 10 x 5 = 50
         threads.emplace_back(doRead, &f);
         threads.emplace_back(doRead, &f);
@@ -162,37 +162,57 @@ TEST(QueueModule, fullTest)
         // all data has to be conssumed
         CHECK_FALSE(f.poll(POLLIN, events, 0, std::nothrow)); // to be false
 
+        ::munmap(p, nfo.block_count * nfo.block_size);
+        //s = f.read(nullptr,200,std::nothrow);
+
+    } catch (const std::exception& e)
+    {
+        FAIL(e.what());
+    }
+}
+
+TEST(QueueModule, zero_copy)
+{
+    try
+    {
+        POSIX::File f("/dev/queue", O_RDWR /*| O_NONBLOCK*/);
+        queue_info_ nfo;
+        nfo.block_size = 1024;
+        nfo.block_count = 4;
+        f.ioctl(QUEUE_INIT, &nfo);
+        uint8_t* p = (uint8_t*) f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
+        struct block_hdr_t * pblock = reinterpret_cast<struct block_hdr_t*>(p + 0 * nfo.block_size);
+
+        pblock->wr_pos_ = nfo.block_start_offset;
+        pblock->status = blck_writting;
+
+        pblock->wr_pos_ += sprintf((char*) pblock + pblock->wr_pos_, "1234567890123");
         // start a tcp server to provide data
         tcpSock sock(std::nothrow);
         CHECK_TRUE(sock);
-        CHECK_TRUE(sock.setupServer(2000,std::nothrow));
+        CHECK_TRUE(sock.setupServer(2000, std::nothrow));
         //std::thread srv(doTcpServer,&sock);
 
-        tcpSock sock_clt("192.168.0.1",80/*,std::nothrow*/);
+        tcpSock sock_clt("0.0.0.0", 2000/*,std::nothrow*/);
         CHECK_TRUE(sock_clt);
 
         //start tcp client to connect and do splice
         pblock->wr_pos_ += 50;
 
-        f.spliceTo(f.getfd(),50);
-        //f.sendFile(sock_clt.Getfd(),50);
+        // f.spliceTo(sock_clt.getfd(),50);
+        f.sendFile(sock_clt.getfd(), 50);
 
         //CHECK(::sendfile(sock_clt.Getfd(),f.getfd(),0,50) == 50);
 
         pblock->wr_pos_ += 50;
-        CHECK(splice(f.getfd(),nullptr,sock_clt.Getfd(),nullptr,50,0) == 50);
-        sock_clt.shutdown(true,true);
+        CHECK(splice(f.getfd(), nullptr, sock_clt.getfd(), nullptr, 50, 0) == 50);
+        sock_clt.shutdown(true, true);
         CHECK(read_pos == 50);
         //srv.join();
 
-
         CHECK_TRUE(sock_clt.close(std::nothrow));
         CHECK_TRUE(sock.close(std::nothrow));
-
-
         ::munmap(p, nfo.block_count * nfo.block_size);
-        //s = f.read(nullptr,200,std::nothrow);
-
     } catch (const std::exception& e)
     {
         FAIL(e.what());

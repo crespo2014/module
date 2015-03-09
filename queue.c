@@ -65,6 +65,7 @@
 #include <linux/wait.h>
 #include <linux/sched.h>
 #include <linux/poll.h>
+#include <linux/types.h>
 //#include <linux/atomic.h>
 #include <asm/atomic.h>
 
@@ -471,8 +472,23 @@ unsigned int queue_poll(struct file *fd, struct poll_table_struct *pwait)
     return mask;
 }
 
+loff_t queue_llseek(struct file * fd, loff_t offset, int flag)
+{
+    printk_debug("Queue llseek offset %lld flag %d\n",offset,flag);
+    //struct queue_t* pthis = (struct queue_t*)fd->private_data;
+    return offset;
+}
+
+ssize_t queue_sendpage(struct file *fd, struct page * pg, int i1, size_t len, loff_t * offset, int i2)
+{
+    //struct queue_t* pthis = (struct queue_t*)fd->private_data;
+    printk_debug("Queue sendPage len %u i1 %d i2 %d\n",len,i1,i2);
+    return 10;
+}
+
 // file operations for misc device
 static struct file_operations fops_sys = { //
+        .llseek =   queue_llseek, //
         .open = device_open, //
         .read = device_read, //
         .write = device_write, //
@@ -480,6 +496,8 @@ static struct file_operations fops_sys = { //
         .mmap = device_mmap, //
         .unlocked_ioctl = device_ioctl, //
         .release = device_close, //
+        .sendpage = queue_sendpage, //
+
         };
 // misc device resgistration
 static struct miscdevice misc = { //
