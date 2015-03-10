@@ -56,7 +56,7 @@ static void doRead(POSIX::File* f)
 }
 
 char read_data[100];
-char read_pos;
+size_t read_pos;
 /**
  * read incoming data until n
  */

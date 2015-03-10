@@ -110,7 +110,7 @@ endef
 define target-rule 
 
 $(build_dir)/$(1)_$(2) : $(addsuffix .$(1)_$(2),$(call find-o,$($(1)_src_dir)) $(call get-o,$($(1)_src)))
-	$(Q)echo "$$(@F)"
+#	$(Q)echo "$$(@F)"
 	$(Q)$(CXX) -o $$@ $$^ $(common_ld) $($(1)_ld)  $($(2)_ld)
 	
 # alias for target name	
@@ -129,7 +129,7 @@ $(build_dir)/$(1).dbg : $(addsuffix .$(1)_,$(call find-o,$($(1)_src_dir)) $(call
 	$(Q)$(CXX) -o $$@ $$^ $(common_ld) $($(1)_ld) 
 
 $(build_dir)/$(1) : $(build_dir)/$(1).dbg
-	$(Q)echo "$$(@F)"  
+#	$(Q)echo "$$(@F)"  
 	$(Q)$(OBJCOPY) -S $(build_dir)/$(1).dbg $(build_dir)/$(1)
 	$(Q)cd $(build_dir); $(OBJCOPY) --add-gnu-debuglink=$(1).dbg $(1)
 
@@ -150,7 +150,7 @@ $(build_dir)/$(1:%.cpp=%.o).$(2)_$(3): $(1) |  $(dir $(build_dir)/$(1))
 #	$(Q)echo "$(build_dir)/$(1).$(2)$(3).d"
 	$(Q)$(CXX) -MM $($(3)_cpp) $(common_cpp) $($(2)_cpp) -MT "$(build_dir)/$(1:%.cpp=%.o).$(2)_$(3)" -MMD -MP -MF "$(build_dir)/$(1).$(2)_$(3).d"  $(1)
 	
-	$(Q)echo "$$(@F)"
+#	$(Q)echo "$$(@F)"
 	$(Q)$(CXX) -c $($(3)_cpp) $(common_cpp) $($(2)_cpp) -o $$@  $(1)
 
 -include $(build_dir)/$(1).$(2)_$(3).d
@@ -169,7 +169,7 @@ $(build_dir)/$(1:%.c=%.o).$(2)_$(3): $(1)  |  $(dir $(build_dir)/$(1))
 #	$(Q)echo "$(build_dir)/$(1).$(2)$(3).d"
 	$(Q)$(CC) -MM $($(3)_cpp) $(common_cpp) $($(2)_cpp) -MT "$(build_dir)/$(1:%.c=%.o).$(2)_$(3)" -MMD -MP -MF "$(build_dir)/$(1).$(2)_$(3).d"  $(1)
 	
-	$(Q)echo "$$(@F)"
+#	$(Q)echo "$$(@F)"
 	$(Q)$(CC) -c  $($(3)_cpp) $(common_cpp) $($(2)_cpp)  -o $$@  $(1)
 
 -include $(build_dir)/$(1).$(2)_$(3).d
