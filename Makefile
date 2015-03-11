@@ -62,7 +62,7 @@ common_cpp += -finput-charset=ascii -Wall -Wextra -pedantic -Wmissing-declaratio
 
 
 queue_mtest_src_dir := mtest
-queue_mtest_src := cpp-lib/posix/File.cpp
+queue_mtest_src := cpp-lib/posix/File.cpp cpp-lib/posix/thread.cpp
 queue_mtest_cpp := -I../cpputest/include
 queue_mtest_cpp += -include ../cpputest/include/CppUTest/MemoryLeakDetectorNewMacros.h
 queue_mtest_cpp += -include ../cpputest/include/CppUTest/MemoryLeakDetectorMallocMacros.h
