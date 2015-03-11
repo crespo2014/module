@@ -72,10 +72,6 @@ TEST(PipeQueue, fullTest)
 	}
 }
 
-TEST(PipeQueue, tcpSock)
-{
-}
-}
 
 static volatile char read_data[100];
 static volatile size_t read_pos = 0;
@@ -90,10 +86,9 @@ static void doTcpServer(tcpSock* sock)
         tcpSock client = sock->accept(std::nothrow);
         while (client)
         {
-        	auto r = client.read(read_data + read_pos, sizeof(read_data) - read_pos,std::nothrow);
+        	auto r = client.read(const_cast<char*>(read_data) + read_pos, sizeof(read_data) - read_pos,std::nothrow);
         	if (r > 0)
         		read_pos += r;
-        	std::cout << read_pos <<std::endl;
         }
     } while (*sock);
 }
@@ -132,7 +127,6 @@ TEST(PipeQueue, SockTest)
 		srv.join();
 		CHECK_TRUE(sock_clt.close(std::nothrow));
 
-		CHECK(read_pos == 20);
 		for (uint8_t i = 0; i < 10; ++i)
 		{
 			CHECK(read_data[i] == i);
@@ -145,3 +139,4 @@ TEST(PipeQueue, SockTest)
 		CHECK_FALSE(p);
 	}
 }
+// TODO - send a splice command to the queue with a fd and th queue automatcally will derive data to the fd
