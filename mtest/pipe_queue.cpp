@@ -25,7 +25,7 @@ TEST_GROUP(PipeQueue)
 {
 	void setup()
 	{
-
+		Runnable::disableSignal(SIGPIPE);
 	}
 	void teardown()
 	{
@@ -88,14 +88,16 @@ static void doTcpServer(tcpSock* sock)
         {
         	auto r = client.read(const_cast<char*>(read_data) + read_pos, sizeof(read_data) - read_pos,std::nothrow);
         	if (r > 0)
+        	{
+        		client.write(const_cast<char*>(read_data) + read_pos, r);
         		read_pos += r;
+        	}
         }
     } while (*sock);
 }
 
 TEST(PipeQueue, SockTest)
 {
-	Runnable::disableSignal(SIGPIPE);
 	// Test pipe for read write
 	{
 		Pipe p(std::nothrow);
@@ -112,7 +114,7 @@ TEST(PipeQueue, SockTest)
 		CHECK_TRUE(sock.setupServer(2000, std::nothrow));
 		std::thread srv(doTcpServer,&sock);
 
-		tcpSock sock_clt("0.0.0.0", 2000/*,std::nothrow*/);
+		tcpSock sock_clt("0.0.0.0", 2000,std::nothrow);
 		CHECK_TRUE(sock_clt);
 
 		CHECK(p.spliceTo(sock_clt.getfd(),10) == 10);
@@ -120,18 +122,25 @@ TEST(PipeQueue, SockTest)
 		CHECK(p.spliceTo(sock_clt.getfd(),10) == 10);
 		sleep(2);
 		CHECK(read_pos == 20);
+		for (uint8_t i = 0; i < 10; ++i)
+		{
+			CHECK(read_data[i] == i);
+			CHECK(read_data[i+10] == i);
+		}
+		CHECK(p.spliceFrom(sock_clt.getfd(),20) == 20);
+
+		CHECK(p.read(const_cast<char*>(read_data),20,std::nothrow) == 20);
+		for (uint8_t i = 0; i < 10; ++i)
+		{
+			CHECK(read_data[i] == i);
+			CHECK(read_data[i+10] == i);
+		}
 		sock_clt.shutdown(false,true);
 		sock.shutdown(true,true);
 		sleep(1);
 		CHECK_TRUE(sock.close(std::nothrow));
 		srv.join();
 		CHECK_TRUE(sock_clt.close(std::nothrow));
-
-		for (uint8_t i = 0; i < 10; ++i)
-		{
-			CHECK(read_data[i] == i);
-			CHECK(read_data[i+10] == i);
-		}
 
 		CHECK_TRUE(p.shutdownRead(std::nothrow));
 		CHECK_FALSE(p);

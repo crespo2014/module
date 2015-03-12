@@ -79,7 +79,7 @@ TEST(QueueModule, fullTest)
     std::cout.setf(std::ios_base::unitbuf);
     try
     {
-        POSIX::File f("/dev/queue", O_RDWR /*| O_NONBLOCK*/);
+        POSIX::File f("/dev/queue", O_RDWR | O_FSYNC | O_ASYNC /*| O_NONBLOCK*/);
         queue_info_ nfo;
         nfo.block_size = 1024;
         nfo.block_count = 4;
@@ -187,8 +187,6 @@ TEST(QueueModule, zero_copy)
         CHECK(::pipe(fd) ==0);
 
         f.spliceTo(fd[1],50);
-
-
 
 //        f.ioctl(QUEUE_INIT, &nfo);
 //         auto m = f.mmap(nullptr, nfo.block_count * nfo.block_size, PROT_READ | PROT_WRITE, MAP_SHARED);
